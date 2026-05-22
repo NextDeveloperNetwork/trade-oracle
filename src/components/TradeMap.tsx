@@ -6,6 +6,14 @@ import { useTradingEngine } from "@/context/TradingContext";
 
 export default function TradeMap() {
   const { marketData, balances, activeCoins } = useTradingEngine();
+  const [isMobile, setIsMobile] = React.useState(false);
+
+  React.useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 640);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
 
   const getSignalColor = (coin: string) => {
     const signal = marketData[coin]?.signal;
@@ -17,8 +25,8 @@ export default function TradeMap() {
   const coinsToDisplay = activeCoins.length > 0 ? activeCoins : ["BTC", "ETH", "XRP"];
 
   return (
-    <div className="glass-panel p-8 rounded-3xl border border-[var(--color-crypto-border)] min-h-[400px] relative overflow-hidden">
-      <div className="text-[9px] font-mono text-[var(--color-crypto-muted)] uppercase tracking-[0.4em] mb-10 opacity-50">Neural Connectivity Network</div>
+    <div className="glass-panel p-4 sm:p-8 rounded-3xl border border-[var(--color-crypto-border)] min-h-[360px] sm:min-h-[400px] relative overflow-hidden">
+      <div className="text-[8px] sm:text-[9px] font-mono text-[var(--color-crypto-muted)] uppercase tracking-[0.4em] mb-6 sm:mb-10 opacity-50">Neural Connectivity Network</div>
       
       <div className="relative h-[300px] flex items-center justify-center">
         {/* Central Hub (USDT) */}
@@ -32,16 +40,17 @@ export default function TradeMap() {
             scale: [1, 1.05, 1]
           }}
           transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
-          className="w-20 h-20 rounded-full bg-white/[0.02] border border-[var(--color-crypto-accent)]/30 flex flex-col items-center justify-center z-20 backdrop-blur-3xl"
+          className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-white/[0.02] border border-[var(--color-crypto-accent)]/30 flex flex-col items-center justify-center z-20 backdrop-blur-3xl"
         >
-          <span className="text-[10px] font-black tracking-[0.2em] text-[var(--color-crypto-accent)] opacity-80">USDT</span>
-          <span className="text-[8px] font-mono opacity-30 mt-0.5">${(balances.USDT || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+          <span className="text-[9px] sm:text-[10px] font-black tracking-[0.2em] text-[var(--color-crypto-accent)] opacity-80">USDT</span>
+          <span className="text-[7px] sm:text-[8px] font-mono opacity-30 mt-0.5">${(balances.USDT || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
         </motion.div>
 
         {/* Orbiting Coins */}
         {coinsToDisplay.map((coin, idx) => {
           const angle = (idx * (360 / coinsToDisplay.length)) * (Math.PI / 180);
-          const radius = 120;
+          // Responsive radius
+          const radius = isMobile ? 85 : 120;
           const x = Math.cos(angle) * radius;
           const y = Math.sin(angle) * radius;
 
@@ -70,15 +79,15 @@ export default function TradeMap() {
               {/* Coin Node */}
               <motion.div 
                 style={{ 
-                  left: `calc(50% + ${x}px - 24px)`,
-                  top: `calc(50% + ${y}px - 24px)`
+                  left: `calc(50% + ${x}px - ${isMobile ? '20px' : '24px'})`,
+                  top: `calc(50% + ${y}px - ${isMobile ? '20px' : '24px'})`
                 }}
                 animate={{ 
                   borderColor: signal !== "HOLD" ? color : "rgba(255,255,255,0.1)",
                   boxShadow: signal !== "HOLD" ? `0 0 15px ${color}22` : '0 0 0px transparent',
                   background: signal !== "HOLD" ? `${color}11` : "rgba(255,255,255,0.02)",
                 }}
-                className="absolute w-12 h-12 rounded-xl border flex flex-col items-center justify-center transition-all duration-500 backdrop-blur-xl z-20"
+                className={`absolute ${isMobile ? 'w-10 h-10' : 'w-12 h-12'} rounded-xl border flex flex-col items-center justify-center transition-all duration-500 backdrop-blur-xl z-20`}
               >
                 <span className="text-[8px] font-black tracking-tight text-white/90">{coin}</span>
                 {signal !== "HOLD" && (

@@ -90,10 +90,11 @@ type TradingContextType = {
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const DEFAULT_COINS = ["BTC", "ETH", "XRP"];
-const SAFE_RESERVE = 0.0;     // No mandatory reserve
+const SAFE_RESERVE = 10.0;    // Always keep $10 USDT reserve for operations
 const NANO_FILLER  = 10.1;    // Used for buy-and-trim on small trades
 const MIN_NOTIONAL = 10.0;    // Binance minimum sell value
 const MIN_BOT_USD  = 0.10;    // Minimum bot trade size to bother with
+const MAX_ALLOCATION = 0.20;  // Max 20% of available funds per trade
 
 // ─── Math Helpers ────────────────────────────────────────────────────────────
 
@@ -457,7 +458,7 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
         const totalBuy = usdtAmount + MIN_NOTIONAL; // e.g. $2 + $10 = $12
         const available = (balancesRef.current.USDT || 0) - SAFE_RESERVE;
         if (totalBuy > available) {
-          notify(`Nano-BUY blocked: Need $${totalBuy.toFixed(2)}, only $${available.toFixed(2)} available.`, "error");
+          notify(`Nano-BUY blocked: Need $${totalBuy.toFixed(2)}, only $${available.toFixed(2)} above reserve.`, "error");
           return false;
         }
         const step1 = await executeTrade("BUY", coin, totalBuy, true);
@@ -475,7 +476,7 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
         const totalSell = usdtAmount + MIN_NOTIONAL; // Then sell $12 worth
         const available = (balancesRef.current.USDT || 0) - SAFE_RESERVE;
         if (buyFirst > available) {
-          notify(`Nano-SELL blocked: Need $${buyFirst.toFixed(2)} USDT to inflate, only $${available.toFixed(2)} available.`, "error");
+          notify(`Nano-SELL blocked: Need $${buyFirst.toFixed(2)} USDT to inflate, only $${available.toFixed(2)} above reserve.`, "error");
           return false;
         }
         const step1 = await executeTrade("BUY", coin, buyFirst, true);
@@ -492,7 +493,7 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
     if (action === "BUY" && !isInternal) {
       const afterTrade = (balancesRef.current.USDT || 0) - usdtAmount;
       if (afterTrade < SAFE_RESERVE) {
-        notify("Insufficient funds to maintain transaction.", "error");
+        notify("Reserve Protection: trade would dip below $10 reserve.", "error");
         return false;
       }
     }
@@ -655,12 +656,12 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
         if (needsBuy) {
           const bal  = balancesRef.current.USDT || 0;
           const aggr = ["HYPER", "AGGRESSIVE", "SNIPER"].includes(strategyRef.current);
-          const baseConf = aggr ? 0.50 : 0.25;
+          const baseConf = aggr ? 0.10 : 0.05;
           const closes = hist.map(c => c.c);
           const s = avg(closes.slice(-5));
           const l = avg(closes.slice(-20));
-          const conf = Math.min(0.90, Math.max(baseConf, (Math.abs(s - l) / l) * 80));
-          let amt = bal * conf;
+          const conf = Math.min(MAX_ALLOCATION, Math.max(baseConf, (Math.abs(s - l) / l) * 80));
+          let amt = (bal - SAFE_RESERVE) * conf;
 
           // Smart-scale: can't exceed available budget above reserve + filler
           const maxSpend = Math.max(0, bal - SAFE_RESERVE - (amt < MIN_NOTIONAL ? NANO_FILLER : 0));
@@ -794,7 +795,7 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
       notify("Insufficient balance for conversion.", "error"); return false;
     }
     if (fromAsset === "USDT" && (balancesRef.current.USDT || 0) - amountOfFrom < SAFE_RESERVE) {
-      notify("Insufficient USDT balance for conversion.", "error"); return false;
+      notify("Reserve Protection: conversion would drop USDT below $10.", "error"); return false;
     }
 
     if (isLiveMode) {

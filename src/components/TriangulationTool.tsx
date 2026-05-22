@@ -78,7 +78,8 @@ export default function TriangulationTool() {
             <button 
               onClick={() => {
                 const available = balances[convertFromAsset] || 0;
-                setAmount(available.toString());
+                const safeAmount = convertFromAsset === "USDT" ? Math.max(0, available - 10.0) : available;
+                setAmount(safeAmount.toString());
               }}
               className="text-[8px] font-mono font-bold text-blue-400/80 hover:text-blue-400"
             >
