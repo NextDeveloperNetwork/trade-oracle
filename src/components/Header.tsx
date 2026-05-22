@@ -8,27 +8,30 @@ export default function Header() {
   const { totalUSDT } = useTradingEngine();
 
   return (
-    <nav className="border-b border-[var(--color-crypto-border)] bg-[var(--color-crypto-bg)] fixed w-full top-0 z-50">
+    <nav className="border-b border-[var(--color-crypto-border)] bg-[var(--color-crypto-bg)] fixed w-full top-0 z-50 safe-top">
       <div className="max-w-7xl mx-auto px-4 sm:px-8 h-16 flex items-center justify-between">
-        <div className="flex gap-6 items-center">
-          <div className="text-[var(--color-crypto-accent)] font-bold font-mono tracking-widest text-lg border-r border-[var(--color-crypto-border)] pr-6 mr-2">
-            ORACLE
+        <div className="flex gap-4 sm:gap-6 items-center">
+          <div className="text-[var(--color-crypto-accent)] font-bold font-mono tracking-widest text-base sm:text-lg border-r border-[var(--color-crypto-border)] pr-4 sm:pr-6 mr-1 sm:mr-2">
+            <span className="hidden sm:inline">ORACLE</span>
+            <span className="sm:hidden">Ω</span>
           </div>
-          <Link href="/" className="text-white transition-colors font-mono text-xs flex items-center gap-2">
-            <Zap size={14}/> Dashboard
-          </Link>
-          <Link href="/trades" className="text-white/60 hover:text-white transition-colors font-mono text-xs flex items-center gap-2 border-l border-white/10 pl-6">
-            <BarChart3 size={14}/> Trades
-          </Link>
-          <Link href="/markets" className="text-white/60 hover:text-white transition-colors font-mono text-xs flex items-center gap-2 border-l border-white/10 pl-6">
-            Markets
-          </Link>
+          <div className="flex items-center gap-4 sm:gap-6">
+            <Link href="/" className="text-white transition-colors font-mono text-[10px] sm:text-xs flex items-center gap-2">
+              <Zap size={14}/> <span className="hidden sm:inline">Dashboard</span>
+            </Link>
+            <Link href="/trades" className="text-white/60 hover:text-white transition-colors font-mono text-[10px] sm:text-xs flex items-center gap-2 border-l border-white/10 pl-4 sm:pl-6">
+              <BarChart3 size={14}/> <span className="hidden sm:inline">Trades</span>
+            </Link>
+            <Link href="/markets" className="text-white/60 hover:text-white transition-colors font-mono text-[10px] sm:text-xs flex items-center gap-2 border-l border-white/10 pl-4 sm:pl-6">
+              <Triangle className="rotate-180" size={14}/> <span className="hidden sm:inline">Markets</span>
+            </Link>
+          </div>
         </div>
         
-        <div className="flex items-center gap-3 bg-[var(--color-crypto-accent)]/10 px-4 py-2 rounded-xl border border-[var(--color-crypto-accent)]/20">
-          <Wallet size={16} className="text-[var(--color-crypto-accent)]" />
-          <div className="font-mono font-bold text-sm tracking-tight text-white">
-            ${totalUSDT.toLocaleString(undefined, { minimumFractionDigits: 2 })} USD
+        <div className="flex items-center gap-2 sm:gap-3 bg-[var(--color-crypto-accent)]/10 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl border border-[var(--color-crypto-accent)]/20">
+          <Wallet size={14} className="text-[var(--color-crypto-accent)] shrink-0" />
+          <div className="font-mono font-bold text-[11px] sm:text-sm tracking-tight text-white whitespace-nowrap">
+            <span className="hidden xs:inline">$</span>{totalUSDT.toLocaleString(undefined, { minimumFractionDigits: 2 })}
           </div>
         </div>
       </div>

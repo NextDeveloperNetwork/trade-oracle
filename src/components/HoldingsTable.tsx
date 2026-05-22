@@ -41,11 +41,11 @@ export default function HoldingsTable() {
         <table className="w-full text-left font-mono text-[10px]">
           <thead className="sticky top-0 bg-black/90 backdrop-blur-md z-10">
             <tr className="text-white/20 uppercase tracking-widest border-b border-white/5">
-              <th className="px-5 py-3 font-normal">Asset</th>
-              <th className="px-5 py-3 font-normal">Balance</th>
-              <th className="px-5 py-3 font-normal">USD Value</th>
-              <th className="px-5 py-3 font-normal">24h</th>
-              <th className="px-5 py-3 font-normal text-right">Action</th>
+              <th className="px-3 sm:px-5 py-3 font-normal">Asset</th>
+              <th className="px-3 sm:px-5 py-3 font-normal">Balance</th>
+              <th className="px-3 sm:px-5 py-3 font-normal">USD Value</th>
+              <th className="px-5 py-3 font-normal hidden sm:table-cell">24h</th>
+              <th className="px-3 sm:px-5 py-3 font-normal text-right">Action</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-white/[0.02]">
@@ -60,21 +60,21 @@ export default function HoldingsTable() {
                   onClick={() => setConvertFromAsset(asset)}
                   className="hover:bg-white/[0.04] active:bg-white/[0.08] transition-colors group h-[48px] cursor-pointer"
                 >
-                  <td className="px-5 py-2">
+                  <td className="px-3 sm:px-5 py-2">
                     <div className="flex items-center gap-2">
-                      <div className="w-5 h-5 rounded bg-white/5 flex items-center justify-center text-[9px] font-bold group-hover:border-[var(--color-crypto-accent)]/30 border border-transparent transition-all">
+                      <div className="w-5 h-5 rounded bg-white/5 hidden xs:flex items-center justify-center text-[9px] font-bold group-hover:border-[var(--color-crypto-accent)]/30 border border-transparent transition-all">
                         {asset[0]}
                       </div>
                       <span className="font-bold text-white/80">{asset}</span>
                     </div>
                   </td>
-                  <td className="px-5 py-2 text-white/50">
-                    {amount < 0.001 ? amount.toFixed(6) : amount.toLocaleString(undefined, { maximumFractionDigits: 3 })}
+                  <td className="px-3 sm:px-5 py-2 text-white/50">
+                    {amount < 0.001 ? amount.toFixed(4) : amount.toLocaleString(undefined, { maximumFractionDigits: 2 })}
                   </td>
-                  <td className="px-5 py-2 font-bold text-white/90">
+                  <td className="px-3 sm:px-5 py-2 font-bold text-white/90">
                     ${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </td>
-                  <td className="px-5 py-2">
+                  <td className="px-5 py-2 hidden sm:table-cell">
                     {asset === "USDT" ? (
                       <span className="text-white/5">—</span>
                     ) : gain !== undefined && gain !== null ? (
@@ -85,7 +85,7 @@ export default function HoldingsTable() {
                       <span className="text-white/5">...</span>
                     )}
                   </td>
-                  <td className="px-5 py-2 text-right">
+                  <td className="px-3 sm:px-5 py-2 text-right">
                     {asset !== "USDT" && (
                       <button
                         onClick={(e) => handleClosePosition(e, asset, value)}

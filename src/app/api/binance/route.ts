@@ -22,7 +22,6 @@ export async function GET(req: Request) {
 
   if (type === "exchangeInfo") {
     try {
-      // Fetch both exchangeInfo and 24h tickers to get prices and gains
       const [infoRes, tickerRes] = await Promise.all([
         fetch(`${BASE_URL}/api/v3/exchangeInfo`),
         fetch(`${BASE_URL}/api/v3/ticker/24hr`)
@@ -31,7 +30,16 @@ export async function GET(req: Request) {
       const infoData = await infoRes.json();
       const tickerData = await tickerRes.json();
 
-      // Create a map of tickers for quick lookup
+      if (infoRes.status === 429 || tickerRes.status === 429) {
+        console.error("Binance Rate Limited (429)");
+        return NextResponse.json({ error: "Rate limited", retryAfter: infoRes.headers.get("Retry-After") }, { status: 429 });
+      }
+
+      if (!infoData.symbols || !Array.isArray(tickerData)) {
+        console.error("Invalid Binance API Response", { infoData, tickerData });
+        return NextResponse.json([], { status: 200 });
+      }
+
       const tickerMap = new Map();
       tickerData.forEach((t: any) => tickerMap.set(t.symbol, t));
 
@@ -52,8 +60,9 @@ export async function GET(req: Request) {
         });
         
       return NextResponse.json(pairs);
-    } catch (e) {
-      return NextResponse.json({ error: "Failed to fetch market data" }, { status: 500 });
+    } catch (e: any) {
+      console.error("Binance Market Fetch Error:", e.message);
+      return NextResponse.json([], { status: 200 });
     }
   }
 

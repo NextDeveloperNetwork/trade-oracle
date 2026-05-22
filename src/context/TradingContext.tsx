@@ -43,6 +43,8 @@ type OpenPosition = {
   strategy: BotStrategy;
 };
 
+export type HistorySnapshot = { t: number; v: number };
+
 type LiveCoinState = {
   price: number | null;
   prevPrice: number | null;
@@ -81,6 +83,7 @@ type TradingContextType = {
   syncBalances: () => Promise<void>;
   convertFromAsset: string;
   setConvertFromAsset: (a: string) => void;
+  snapshots: HistorySnapshot[];
 };
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -293,6 +296,8 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
   // Track open (un-sold) positions per coin
   const openPositionsRef = useRef<OpenPosition[]>([]);
 
+  const [snapshots, setSnapshots] = useState<HistorySnapshot[]>([]);
+
   // Stable refs for use inside intervals/closures
   const strategyRef        = useRef(currentStrategy);
   const autoTradeRef       = useRef(isAutoTrading);
@@ -312,8 +317,12 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const saved = localStorage.getItem("activeCoins");
     if (saved) try { setActiveCoins(JSON.parse(saved)); } catch {}
+
+    const savedSnaps = localStorage.getItem("portfolioSnapshots");
+    if (savedSnaps) try { setSnapshots(JSON.parse(savedSnaps)); } catch {}
   }, []);
   useEffect(() => { localStorage.setItem("activeCoins", JSON.stringify(activeCoins)); }, [activeCoins]);
+  useEffect(() => { localStorage.setItem("portfolioSnapshots", JSON.stringify(snapshots)); }, [snapshots]);
 
   const addCoin = (symbol: string) => {
     const upper = symbol.toUpperCase();
@@ -665,6 +674,7 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
       try {
         const res  = await fetch("/api/binance?type=exchangeInfo");
         const data = await res.json();
+        if (!Array.isArray(data)) return;
         const map: Record<string, number> = {};
         data.forEach((d: any) => { map[d.baseAsset] = parseFloat(d.gain); });
         setMarketData(prev => {
@@ -706,6 +716,8 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => { if (isLiveMode) syncBalances(); }, [isLiveMode, syncBalances]);
 
+  useEffect(() => { localStorage.setItem("snapshots", JSON.stringify(snapshots)); }, [snapshots]);
+
   const setUSDTBalance = (amount: number) => {
     // Avoid double-firing side effects in setBalances updater (React StrictMode)
     const currentUSDT = balancesRef.current.USDT || 0;
@@ -715,6 +727,41 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
     }
     setBalances(prev => ({ ...prev, USDT: amount }));
   };
+
+  // ─── Portfolio Historian (Snapshots for P&L) ──────────────────────────────
+
+  useEffect(() => {
+    const takeSnapshot = () => {
+      const currentVal = calculateTotalUSDT();
+      if (currentVal <= 0) return;
+      
+      setSnapshots(prev => {
+        const now = Date.now();
+        const newSnapshot = { t: now, v: currentVal };
+        const updated = [...prev, newSnapshot];
+        
+        // Pruning logic: keep all from last 24h, then 1 per hour for 1mo, 1 per day for 1y
+        if (updated.length < 5000) return updated;
+        
+        const oneDayAgo = now - 24 * 60 * 60 * 1000;
+        return updated.filter((s, i) => {
+          if (s.t > oneDayAgo) return true;
+          const prevS = updated[i-1];
+          if (!prevS) return true;
+          const hour = 60 * 60 * 1000;
+          return Math.floor(s.t / hour) !== Math.floor(prevS.t / hour);
+        }).slice(-5000);
+      });
+    };
+
+    const timeout = setTimeout(takeSnapshot, 10000);
+    const interval = setInterval(takeSnapshot, 60000);
+    
+    return () => {
+      clearTimeout(timeout);
+      clearInterval(interval);
+    };
+  }, [calculateTotalUSDT]);
 
   // ─── Triangulation ───────────────────────────────────────────────────────
 
@@ -771,6 +818,7 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
       totalProfit,
       syncBalances,
       convertFromAsset, setConvertFromAsset,
+      snapshots,
     }}>
       {children}
     </TradingContext.Provider>
