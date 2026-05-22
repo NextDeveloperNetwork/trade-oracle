@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Zap, Triangle, Wallet, BarChart3 } from "lucide-react";
 
 export default function Header() {
-  const { totalUSDT } = useTradingEngine();
+  const { totalUSDT, isLiveMode } = useTradingEngine();
 
   return (
     <nav className="border-b border-[var(--color-crypto-border)] bg-[var(--color-crypto-bg)] fixed w-full top-0 z-50 safe-top">
@@ -28,11 +28,16 @@ export default function Header() {
           </div>
         </div>
         
-        <div className="flex items-center gap-2 sm:gap-3 bg-[var(--color-crypto-accent)]/10 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl border border-[var(--color-crypto-accent)]/20">
-          <Wallet size={14} className="text-[var(--color-crypto-accent)] shrink-0" />
-          <div className="font-mono font-bold text-[11px] sm:text-sm tracking-tight text-white whitespace-nowrap">
-            <span className="hidden xs:inline">$</span>{totalUSDT.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+        <div className={`flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl border transition-all ${isLiveMode ? 'bg-orange-500/10 border-orange-500/30' : 'bg-[var(--color-crypto-accent)]/10 border-[var(--color-crypto-accent)]/20'}`}>
+          <div className="flex flex-col items-end">
+             <span className={`text-[6px] font-bold uppercase tracking-widest ${isLiveMode ? 'text-orange-400' : 'text-[var(--color-crypto-accent)]'}`}>
+               {isLiveMode ? 'Live' : 'Paper'}
+             </span>
+             <div className="font-mono font-bold text-[11px] sm:text-sm tracking-tight text-white whitespace-nowrap">
+               <span className="hidden xs:inline">$</span>{totalUSDT.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+             </div>
           </div>
+          <Wallet size={14} className={`${isLiveMode ? 'text-orange-400' : 'text-[var(--color-crypto-accent)]'} shrink-0`} />
         </div>
       </div>
     </nav>

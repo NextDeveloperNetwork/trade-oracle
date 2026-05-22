@@ -355,15 +355,30 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
     try {
       const res = await fetch("/api/binance");
       const data = await res.json();
+      if (data.error || data.msg) {
+        notify(`Live Sync: ${data.error || data.msg}`, "error");
+        return;
+      }
       if (data.balances) {
         const nb: Portfolio = { USDT: 0 };
+        const newActive = [...activeCoins];
         data.balances.forEach((b: any) => {
           const total = parseFloat(b.free) + parseFloat(b.locked);
-          if (total > 0.00001) nb[b.asset] = total;
+          if (total > 0.0001) {
+            nb[b.asset] = total;
+            if (b.asset !== "USDT" && !newActive.includes(b.asset)) {
+              newActive.push(b.asset);
+            }
+          }
         });
+        if (newActive.length !== activeCoins.length) setActiveCoins(newActive);
         setLiveBalances(prev => { balancesRef.current = nb; return nb; });
+        notify("Live Binance data synchronized", "success");
       }
-    } catch (e) { console.error("Sync failed", e); }
+    } catch (e: any) { 
+      console.error("Sync failed", e);
+      notify("Sync failed. Check network or keys.", "error");
+    }
   }, []);
 
   // ─── Trade Execution ──────────────────────────────────────────────────────

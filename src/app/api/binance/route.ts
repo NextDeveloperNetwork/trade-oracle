@@ -67,7 +67,7 @@ export async function GET(req: Request) {
   }
 
   const timestamp = Date.now();
-  const queryString = `timestamp=${timestamp}`;
+  const queryString = `timestamp=${timestamp}&recvWindow=60000`;
   const signature = generateSignature(queryString);
 
   try {
@@ -101,7 +101,7 @@ export async function POST(req: Request) {
     // Binance requirements: Symbol must be uppercase, e.g., BTCUSDT
     const pair = `${symbol}USDT`.toUpperCase();
     
-    let queryString = `symbol=${pair}&side=${side.toUpperCase()}&type=MARKET&timestamp=${timestamp}`;
+    let queryString = `symbol=${pair}&side=${side.toUpperCase()}&type=MARKET&timestamp=${timestamp}&recvWindow=60000`;
     if (side.toUpperCase() === "BUY" && usdtAmount) {
       // Use quoteOrderQty for buys to bypass LOT_SIZE precision math
       queryString += `&quoteOrderQty=${usdtAmount}`;
