@@ -46,7 +46,7 @@ export default function TriangulationTool() {
   };
 
   return (
-    <div className="glass-panel p-4 sm:p-6 rounded-3xl border border-white/5 h-[480px] flex flex-col bg-white/[0.01]">
+    <div className="glass-panel p-4 sm:p-5 rounded-3xl border border-white/5 h-[360px] flex flex-col bg-white/[0.01]">
       <div className="flex items-center justify-between mb-6 shrink-0">
         <h3 className="text-[10px] sm:text-[11px] font-mono text-white/30 uppercase tracking-[0.3em] flex items-center gap-2">
           <ArrowRightLeft size={12} className="text-blue-400" /> CONVERSION

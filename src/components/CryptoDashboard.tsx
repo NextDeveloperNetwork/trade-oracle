@@ -157,8 +157,8 @@ export default function CryptoDashboard() {
       <NotificationOverlay />
       
       {/* High-Density Stats Bar */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 mb-6">
-        <div className="glass-panel p-3 sm:p-4 rounded-2xl border border-white/5 bg-white/[0.02] flex flex-col justify-between h-24 sm:h-auto">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 mb-4">
+        <div className="glass-panel p-2.5 rounded-xl border border-white/5 bg-white/[0.01] flex flex-col justify-between h-20 sm:h-auto">
           <div>
             <div className="text-[8px] sm:text-[9px] font-mono text-white/30 uppercase tracking-widest mb-1">Portfolio</div>
             <div className="text-base sm:text-lg font-black font-mono tracking-tighter text-white">
@@ -179,7 +179,7 @@ export default function CryptoDashboard() {
           )}
         </div>
         
-        <div className="glass-panel p-3 sm:p-4 rounded-2xl border border-white/5 bg-white/[0.02] flex flex-col justify-between h-24 sm:h-auto">
+        <div className="glass-panel p-2.5 rounded-xl border border-white/5 bg-white/[0.01] flex flex-col justify-between h-20 sm:h-auto">
           <div>
             <div className="text-[8px] sm:text-[9px] font-mono text-white/30 uppercase tracking-widest mb-1">P&L ({period})</div>
             <div className={`text-base sm:text-lg font-black font-mono tracking-tighter ${periodPnL >= 0 ? 'text-[var(--color-crypto-green)]' : 'text-[var(--color-crypto-red)]'}`}>
@@ -196,7 +196,7 @@ export default function CryptoDashboard() {
           </div>
         </div>
 
-        <div className="glass-panel p-3 sm:p-4 rounded-2xl border border-white/5 bg-white/[0.02] flex items-center justify-between" ref={dropdownRef}>
+        <div className="glass-panel p-2.5 rounded-xl border border-white/5 bg-white/[0.01] flex items-center justify-between relative z-[60]" ref={dropdownRef}>
           <div className="flex flex-col flex-1 min-w-0">
             <div className="text-[8px] sm:text-[9px] font-bold font-mono mb-1 text-[var(--color-crypto-green)]">BOT {isAutoTrading ? 'ACTIVE' : 'OFF'}</div>
             <div className="relative">
@@ -205,9 +205,9 @@ export default function CryptoDashboard() {
                 <ChevronDown size={10} />
               </button>
               {dropdownOpen && (
-                <div className="absolute top-full left-0 mt-1 w-[200px] bg-neutral-900 border border-white/10 rounded-xl shadow-2xl z-50 max-h-[300px] overflow-y-auto">
+                <div className="absolute top-full left-0 mt-1 w-[200px] bg-neutral-900 border border-white/10 rounded-xl shadow-2xl z-[100] max-h-[300px] overflow-y-auto">
                   {(Object.keys(STRATEGY_INFO) as BotStrategy[]).map((s) => (
-                    <button key={s} onClick={() => { setStrategy(s); setDropdownOpen(false); }} className={`w-full flex items-center justify-between px-3 py-3 text-left border-b border-white/5 last:border-0 ${currentStrategy === s ? 'bg-white/5' : ''}`}>
+                    <button key={s} onClick={() => { setStrategy(s); setDropdownOpen(false); }} className={`w-full flex items-center justify-between px-3 py-3 text-left border-b border-white/5 last:border-0 hover:bg-white/5 transition-colors ${currentStrategy === s ? 'bg-white/5' : ''}`}>
                       <span className={`text-[10px] font-mono font-bold ${STRATEGY_INFO[s].color}`}>{STRATEGY_INFO[s].name}</span>
                       <span className="text-[7px] font-black px-1 rounded border border-white/20 opacity-40">{STRATEGY_INFO[s].risk}</span>
                     </button>
@@ -221,7 +221,7 @@ export default function CryptoDashboard() {
           </button>
         </div>
 
-        <div className="glass-panel p-3 sm:p-4 rounded-2xl border border-white/5 bg-white/[0.02] flex items-center justify-between">
+        <div className="glass-panel p-2.5 rounded-xl border border-white/5 bg-white/[0.01] flex items-center justify-between">
           <div className="flex flex-col">
             <div className={`text-[8px] sm:text-[9px] font-bold font-mono ${isLiveMode ? 'text-orange-400' : 'text-blue-400'}`}>
               {isLiveMode ? 'LIVE REAL' : 'PAPER SIM'}
@@ -237,41 +237,41 @@ export default function CryptoDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-9 space-y-6">
           {/* Active Coins Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-3 gap-2 sm:gap-3">
             {activeCoins.filter(coin => marketData[coin]?.price).map((coin) => (
-              <div key={coin} className="glass-panel p-3 sm:p-4 rounded-2xl border border-white/5">
-                <div className="flex justify-between items-start mb-3">
-                  <div className="flex items-center gap-2">
-                    <div className="w-5 h-5 rounded bg-white/5 flex items-center justify-center font-bold text-[9px]">{coin[0]}</div>
-                    <span className="text-[10px] font-bold font-mono">{coin}</span>
+              <div key={coin} className="glass-panel p-2 sm:p-3 rounded-xl border border-white/5 bg-white/[0.01]">
+                <div className="flex justify-between items-start mb-2">
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-4 h-4 rounded bg-white/5 flex items-center justify-center font-bold text-[8px]">{coin[0]}</div>
+                    <span className="text-[9px] font-bold font-mono text-white/80">{coin}</span>
                   </div>
-                  <div className={`text-[7px] font-black px-1.5 py-0.5 rounded border ${marketData[coin]?.signal === 'BUY' ? 'border-green-500/30 text-green-400' : marketData[coin]?.signal === 'SELL' ? 'border-red-500/30 text-red-400' : 'border-white/5 text-white/10'}`}>
+                  <div className={`text-[6px] font-black px-1.5 py-0.5 rounded border ${marketData[coin]?.signal === 'BUY' ? 'border-green-500/30 text-green-400' : marketData[coin]?.signal === 'SELL' ? 'border-red-500/30 text-red-400' : 'border-white/5 text-white/5'}`}>
                     {marketData[coin]?.signal}
                   </div>
                 </div>
-                <div className="mb-2">
-                  <div className={`text-base sm:text-lg font-black font-mono tracking-tighter ${getPriceColor(coin)}`}>
+                <div className="mb-1">
+                  <div className={`text-xs sm:text-sm font-black font-mono tracking-tighter ${getPriceColor(coin)}`}>
                     ${marketData[coin].price?.toLocaleString(undefined, { minimumFractionDigits: getDecimals(coin) })}
                   </div>
                   {marketData[coin]?.gain !== null && (
-                    <div className={`text-[8px] font-mono font-bold ${marketData[coin].gain! >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    <div className={`text-[7px] font-mono font-bold ${marketData[coin].gain! >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                       {marketData[coin].gain! >= 0 ? '+' : ''}{marketData[coin].gain!.toFixed(1)}%
                     </div>
                   )}
                 </div>
-                <div className="flex items-center gap-2 text-[6px] opacity-40 font-mono overflow-hidden">
+                <div className="flex items-center gap-1.5 text-[6px] opacity-20 font-mono overflow-hidden">
                   <span>RSI {marketData[coin]?.rsiValue?.toFixed(0) || '--'}</span>
                   <span>VOL {(marketData[coin]?.volatility! * 100).toFixed(1)}%</span>
                 </div>
               </div>
             ))}
-            <Link href="/markets" className="glass-panel p-4 rounded-2xl border border-dashed border-white/10 flex flex-col items-center justify-center text-white/20 hover:text-white/40 min-h-[100px]">
-              <PlusCircle size={20} />
-              <span className="text-[8px] font-mono mt-1">ADD COIN</span>
+            <Link href="/markets" className="glass-panel p-3 rounded-xl border border-dashed border-white/10 flex flex-col items-center justify-center text-white/10 hover:text-white/30 transition-all min-h-[60px]">
+              <PlusCircle size={14} />
+              <span className="text-[7px] font-mono mt-1 uppercase tracking-widest text-center">Add Asset</span>
             </Link>
           </div>
 
-          <div className="h-[400px]">
+          <div className="h-[320px]">
             <TradeMap />
           </div>
 
@@ -282,7 +282,7 @@ export default function CryptoDashboard() {
         </div>
 
         <div className="lg:col-span-3 space-y-4">
-          <div className="glass-panel rounded-2xl border border-white/5 flex flex-col h-[400px] sm:h-[600px]">
+          <div className="glass-panel rounded-2xl border border-white/5 flex flex-col h-[400px] sm:h-[550px]">
             <div className="p-4 border-b border-white/5 flex items-center justify-between shrink-0">
               <div className="flex gap-4">
                 {["signals", "trades"].map((tab) => (

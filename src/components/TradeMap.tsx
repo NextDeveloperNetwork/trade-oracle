@@ -18,17 +18,24 @@ export default function TradeMap() {
 
   return (
     <div className="glass-panel p-8 rounded-3xl border border-[var(--color-crypto-border)] min-h-[400px] relative overflow-hidden">
-      <div className="text-[10px] font-mono text-[var(--color-crypto-muted)] uppercase tracking-[0.3em] mb-8">System Connectivity Map</div>
+      <div className="text-[9px] font-mono text-[var(--color-crypto-muted)] uppercase tracking-[0.4em] mb-10 opacity-50">Neural Connectivity Network</div>
       
       <div className="relative h-[300px] flex items-center justify-center">
         {/* Central Hub (USDT) */}
         <motion.div 
-          animate={{ boxShadow: ["0 0 20px rgba(51,136,255,0.1)", "0 0 40px rgba(51,136,255,0.3)", "0 0 20px rgba(51,136,255,0.1)"] }}
-          transition={{ duration: 4, repeat: Infinity }}
-          className="w-24 h-24 rounded-full bg-[var(--color-crypto-accent)]/10 border-2 border-[var(--color-crypto-accent)] flex flex-col items-center justify-center z-10"
+          animate={{ 
+            boxShadow: [
+              "0 0 20px rgba(51,136,255,0.05)", 
+              "0 0 50px rgba(51,136,255,0.2)", 
+              "0 0 20px rgba(51,136,255,0.05)"
+            ],
+            scale: [1, 1.05, 1]
+          }}
+          transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+          className="w-20 h-20 rounded-full bg-white/[0.02] border border-[var(--color-crypto-accent)]/30 flex flex-col items-center justify-center z-20 backdrop-blur-3xl"
         >
-          <span className="text-xs font-black tracking-widest text-[var(--color-crypto-accent)]">USDT</span>
-          <span className="text-[10px] font-mono opacity-60">${(balances.USDT || 0).toFixed(0)}</span>
+          <span className="text-[10px] font-black tracking-[0.2em] text-[var(--color-crypto-accent)] opacity-80">USDT</span>
+          <span className="text-[8px] font-mono opacity-30 mt-0.5">${(balances.USDT || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
         </motion.div>
 
         {/* Orbiting Coins */}
@@ -63,27 +70,33 @@ export default function TradeMap() {
               {/* Coin Node */}
               <motion.div 
                 style={{ 
-                  left: `calc(50% + ${x}px - 32px)`,
-                  top: `calc(50% + ${y}px - 32px)`
+                  left: `calc(50% + ${x}px - 24px)`,
+                  top: `calc(50% + ${y}px - 24px)`
                 }}
                 animate={{ 
-                  borderColor: color,
-                  boxShadow: signal !== "HOLD" ? `0 0 20px ${color}44` : 'none',
-                  scale: signal !== "HOLD" ? 1.1 : 1
+                  borderColor: signal !== "HOLD" ? color : "rgba(255,255,255,0.1)",
+                  boxShadow: signal !== "HOLD" ? `0 0 15px ${color}22` : '0 0 0px transparent',
+                  background: signal !== "HOLD" ? `${color}11` : "rgba(255,255,255,0.02)",
                 }}
-                className="absolute w-16 h-16 rounded-2xl bg-black/40 border border-white/10 flex flex-col items-center justify-center transition-colors backdrop-blur-md"
+                className="absolute w-12 h-12 rounded-xl border flex flex-col items-center justify-center transition-all duration-500 backdrop-blur-xl z-20"
               >
-                <span className="text-[10px] font-bold tracking-tight">{coin}</span>
-                <span className={`text-[8px] font-mono mt-1 ${signal === 'BUY' ? 'text-[var(--color-crypto-green)]' : signal === 'SELL' ? 'text-[var(--color-crypto-red)]' : 'text-gray-500'}`}>
-                  {signal}
-                </span>
+                <span className="text-[8px] font-black tracking-tight text-white/90">{coin}</span>
+                {signal !== "HOLD" && (
+                  <motion.span 
+                    initial={{ opacity: 0, scale: 0.5 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className={`text-[6px] font-black mt-0.5 ${signal === 'BUY' ? 'text-[var(--color-crypto-green)]' : 'text-[var(--color-crypto-red)]'}`}
+                  >
+                    {signal}
+                  </motion.span>
+                )}
               </motion.div>
             </React.Fragment>
           );
         })}
       </div>
 
-      <div className="mt-8 grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-3 gap-2 sm:gap-3 mt-8">
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-[var(--color-crypto-green)]" />
           <span className="text-[8px] font-mono uppercase text-[var(--color-crypto-muted)] tracking-wider">Inflow Signal</span>

@@ -84,6 +84,7 @@ type TradingContextType = {
   convertFromAsset: string;
   setConvertFromAsset: (a: string) => void;
   snapshots: HistorySnapshot[];
+  openPositions: OpenPosition[];
 };
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -294,7 +295,9 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
   // Track open (un-sold) positions per coin
+  const [openPositions, setOpenPositions] = useState<OpenPosition[]>([]);
   const openPositionsRef = useRef<OpenPosition[]>([]);
+  useEffect(() => { openPositionsRef.current = openPositions; }, [openPositions]);
 
   const [snapshots, setSnapshots] = useState<HistorySnapshot[]>([]);
 
@@ -320,9 +323,13 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
 
     const savedSnaps = localStorage.getItem("portfolioSnapshots");
     if (savedSnaps) try { setSnapshots(JSON.parse(savedSnaps)); } catch {}
+
+    const savedOpen = localStorage.getItem("openPositions");
+    if (savedOpen) try { setOpenPositions(JSON.parse(savedOpen)); } catch {}
   }, []);
   useEffect(() => { localStorage.setItem("activeCoins", JSON.stringify(activeCoins)); }, [activeCoins]);
   useEffect(() => { localStorage.setItem("portfolioSnapshots", JSON.stringify(snapshots)); }, [snapshots]);
+  useEffect(() => { localStorage.setItem("openPositions", JSON.stringify(openPositions)); }, [openPositions]);
 
   const addCoin = (symbol: string) => {
     const upper = symbol.toUpperCase();
@@ -391,16 +398,20 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
 
     // ── Position Tracking for P&L ──
     if (action === "BUY") {
-      openPositionsRef.current.push({
+      setOpenPositions(prev => [...prev, {
         coin, entryTime: time, entryPrice: price,
         amount, invested: total, strategy: strategyRef.current,
-      });
+      }]);
     } else if (action === "SELL") {
       // Match against oldest open position for this coin (FIFO)
       const idx = openPositionsRef.current.findIndex(p => p.coin === coin);
       if (idx !== -1) {
+        setOpenPositions(prev => {
+          const next = [...prev];
+          next.splice(idx, 1);
+          return next;
+        });
         const pos = openPositionsRef.current[idx];
-        openPositionsRef.current.splice(idx, 1);
         const returned = total;
         const profit   = returned - pos.invested;
         const profitPct = pos.invested > 0 ? (profit / pos.invested) * 100 : 0;
@@ -832,6 +843,7 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
       syncBalances,
       convertFromAsset, setConvertFromAsset,
       snapshots,
+      openPositions,
     }}>
       {children}
     </TradingContext.Provider>
