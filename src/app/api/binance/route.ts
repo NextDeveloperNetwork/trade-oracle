@@ -3,7 +3,8 @@ import crypto from "crypto";
 
 const API_KEY = process.env.BINANCE_API_KEY;
 const SECRET_KEY = process.env.BINANCE_SECRET_KEY;
-const BASE_URL = "https://api.binance.com";
+const IS_US = process.env.IS_BINANCE_US === "true";
+const BASE_URL = IS_US ? "https://api.binance.us" : "https://api.binance.com";
 
 function generateSignature(queryString: string) {
   return crypto
@@ -27,6 +28,12 @@ export async function GET(req: Request) {
         fetch(`${BASE_URL}/api/v3/ticker/24hr`)
       ]);
       
+      if (infoRes.status === 451 || tickerRes.status === 451) {
+        return NextResponse.json({ 
+          error: "Vercel Region Blocked: Move your function region to Europe (Frankfurt/London) to use binance.com." 
+        }, { status: 451 });
+      }
+
       const infoData = await infoRes.json();
       const tickerData = await tickerRes.json();
 
@@ -76,6 +83,12 @@ export async function GET(req: Request) {
         "X-MBX-APIKEY": API_KEY,
       },
     });
+
+    if (response.status === 451) {
+      return NextResponse.json({ 
+        error: "Binance blocked this request because your Vercel server is in a restricted region (e.g. USA). Move your Vercel Function region to Europe (Frankfurt or London) in Project Settings." 
+      }, { status: 451 });
+    }
 
     const data = await response.json();
     if (!response.ok) {

@@ -89,7 +89,7 @@ type TradingContextType = {
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const DEFAULT_COINS = ["BTC", "ETH", "XRP"];
-const SAFE_RESERVE = 10.0;    // Always keep $10 USDT
+const SAFE_RESERVE = 0.0;     // No mandatory reserve
 const NANO_FILLER  = 10.1;    // Used for buy-and-trim on small trades
 const MIN_NOTIONAL = 10.0;    // Binance minimum sell value
 const MIN_BOT_USD  = 0.10;    // Minimum bot trade size to bother with
@@ -446,10 +446,9 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
         const totalBuy = usdtAmount + MIN_NOTIONAL; // e.g. $2 + $10 = $12
         const available = (balancesRef.current.USDT || 0) - SAFE_RESERVE;
         if (totalBuy > available) {
-          notify(`Nano-BUY blocked: Need $${totalBuy.toFixed(2)}, only $${available.toFixed(2)} above reserve.`, "error");
+          notify(`Nano-BUY blocked: Need $${totalBuy.toFixed(2)}, only $${available.toFixed(2)} available.`, "error");
           return false;
         }
-        // Step 1: Buy the inflated amount ($12)
         const step1 = await executeTrade("BUY", coin, totalBuy, true);
         if (!step1) return false;
         await new Promise(r => setTimeout(r, 300));
@@ -465,10 +464,9 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
         const totalSell = usdtAmount + MIN_NOTIONAL; // Then sell $12 worth
         const available = (balancesRef.current.USDT || 0) - SAFE_RESERVE;
         if (buyFirst > available) {
-          notify(`Nano-SELL blocked: Need $${buyFirst.toFixed(2)} USDT to inflate, only $${available.toFixed(2)} above reserve.`, "error");
+          notify(`Nano-SELL blocked: Need $${buyFirst.toFixed(2)} USDT to inflate, only $${available.toFixed(2)} available.`, "error");
           return false;
         }
-        // Step 1: Buy $10 more of the coin to inflate holdings
         const step1 = await executeTrade("BUY", coin, buyFirst, true);
         if (!step1) return false;
         await new Promise(r => setTimeout(r, 300));
@@ -483,7 +481,7 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
     if (action === "BUY" && !isInternal) {
       const afterTrade = (balancesRef.current.USDT || 0) - usdtAmount;
       if (afterTrade < SAFE_RESERVE) {
-        notify("Reserve Protection: trade would dip below $10 reserve.", "error");
+        notify("Insufficient funds to maintain transaction.", "error");
         return false;
       }
     }
@@ -785,7 +783,7 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
       notify("Insufficient balance for conversion.", "error"); return false;
     }
     if (fromAsset === "USDT" && (balancesRef.current.USDT || 0) - amountOfFrom < SAFE_RESERVE) {
-      notify("Reserve Protection: conversion would drop USDT below $10.", "error"); return false;
+      notify("Insufficient USDT balance for conversion.", "error"); return false;
     }
 
     if (isLiveMode) {
