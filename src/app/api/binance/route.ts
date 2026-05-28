@@ -13,6 +13,7 @@ function generateSignature(queryString: string, secret: string) {
     .digest("hex");
 }
 
+
 function authenticate(req: Request) {
   const authHeader = req.headers.get("x-oracle-token");
   const INTERNAL_SECRET = "oracle_default_secret_9988";
@@ -39,10 +40,10 @@ export async function GET(req: Request) {
         fetch(`${BASE_URL}/api/v3/exchangeInfo`),
         fetch(`${BASE_URL}/api/v3/ticker/24hr`)
       ]);
-      
+
       if (infoRes.status === 451 || tickerRes.status === 451) {
-        return NextResponse.json({ 
-          error: "Vercel Region Blocked: Move your function region to Europe (Frankfurt/London) to use binance.com." 
+        return NextResponse.json({
+          error: "Vercel Region Blocked: Move your function region to Europe (Frankfurt/London) to use binance.com."
         }, { status: 451 });
       }
 
@@ -66,12 +67,12 @@ export async function GET(req: Request) {
         .filter((s: any) => s.quoteAsset === "USDT" && s.status === "TRADING")
         .map((s: any) => {
           const ticker = tickerMap.get(s.symbol) || {};
-          
+
           // Extract filters
           const priceFilter = s.filters.find((f: any) => f.filterType === "PRICE_FILTER");
           const lotSizeFilter = s.filters.find((f: any) => f.filterType === "LOT_SIZE");
-          const notionalFilter = s.filters.find((f: any) => f.filterType === "NOTIONAL") || 
-                                 s.filters.find((f: any) => f.filterType === "MIN_NOTIONAL");
+          const notionalFilter = s.filters.find((f: any) => f.filterType === "NOTIONAL") ||
+            s.filters.find((f: any) => f.filterType === "MIN_NOTIONAL");
 
           return {
             symbol: s.symbol,
@@ -90,7 +91,7 @@ export async function GET(req: Request) {
             }
           };
         });
-        
+
       return NextResponse.json(pairs);
     } catch (e: any) {
       console.error("Binance Market Fetch Error:", e.message);
@@ -110,8 +111,8 @@ export async function GET(req: Request) {
     });
 
     if (response.status === 451) {
-      return NextResponse.json({ 
-        error: "Binance blocked this request because your Vercel server is in a restricted region (e.g. USA). Move your Vercel Function region to Europe (Frankfurt or London) in Project Settings." 
+      return NextResponse.json({
+        error: "Binance blocked this request because your Vercel server is in a restricted region (e.g. USA). Move your Vercel Function region to Europe (Frankfurt or London) in Project Settings."
       }, { status: 451 });
     }
 
@@ -120,7 +121,7 @@ export async function GET(req: Request) {
       console.error("Binance API Error:", data);
       return NextResponse.json(data, { status: response.status });
     }
-    
+
     // Security: Only return balances to the frontend, not full account metadata
     return NextResponse.json({
       balances: data.balances || [],
@@ -156,14 +157,14 @@ export async function POST(req: Request) {
     const timestamp = Date.now();
     const upperSym = symbol.toUpperCase();
     const pair = upperSym.endsWith("USDT") ? upperSym : `${upperSym}USDT`;
-    
+
     let queryString = `symbol=${pair}&side=${side.toUpperCase()}&type=MARKET&timestamp=${timestamp}&recvWindow=5000`;
     if (side.toUpperCase() === "BUY" && usdtAmount) {
       queryString += `&quoteOrderQty=${usdtAmount}`;
     } else {
       queryString += `&quantity=${quantity}`;
     }
-    
+
     const signature = generateSignature(queryString, SECRET_KEY);
 
     const response = await fetch(`${BASE_URL}/api/v3/order?${queryString}&signature=${signature}`, {
@@ -174,11 +175,11 @@ export async function POST(req: Request) {
     });
 
     const data = await response.json();
-    
+
     if (!response.ok) {
-       console.error("Binance Order Error:", { status: response.status, data });
+      console.error("Binance Order Error:", { status: response.status, data });
     }
-    
+
     return NextResponse.json(data);
   } catch (error: any) {
     console.error("Route POST error:", error.message);
