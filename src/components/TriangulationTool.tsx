@@ -1,135 +1,152 @@
 "use client";
 
-import React, { useState } from "react";
-import { useTradingEngine } from "@/context/TradingContext";
-import { ArrowRightLeft, RefreshCw, Zap } from "lucide-react";
-import { motion } from "framer-motion";
+import React, { useState, useEffect } from "react";
+import { useTradingEngine, SAFE_RESERVE } from "@/context/TradingContext";
+import { ArrowDownUp, ChevronDown, Wallet } from "lucide-react";
 
 export default function TriangulationTool() {
   const { balances, marketData, activeCoins, executeTriangulation, convertFromAsset, setConvertFromAsset } = useTradingEngine();
   const [toAsset, setToAsset] = useState("BTC");
   const [amount, setAmount] = useState("");
   const [status, setStatus] = useState<"idle" | "success" | "error">("idle");
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   const assets = ["USDT", ...activeCoins];
 
   const handleSwap = async () => {
     const val = parseFloat(amount);
     if (isNaN(val) || val <= 0) return;
-    
-    setStatus("idle"); // reset state before swap
+    setStatus("idle");
     const success = await executeTriangulation(convertFromAsset, toAsset, val);
-    if (success) {
-      setStatus("success");
-      setAmount("");
-      setTimeout(() => setStatus("idle"), 2000);
-    } else {
-      setStatus("error");
-      setTimeout(() => setStatus("idle"), 2000);
-    }
+    setStatus(success ? "success" : "error");
+    if (success) setAmount("");
+    setTimeout(() => setStatus("idle"), 2000);
   };
 
-  const calculatePreview = () => {
+  const handleFlip = () => {
+    if (convertFromAsset === toAsset) return;
+    const temp = convertFromAsset;
+    setConvertFromAsset(toAsset);
+    setToAsset(temp);
+  };
+
+  const handleMax = () => {
+    const available = balances[convertFromAsset] || 0;
+    const safeAmount = convertFromAsset === "USDT" ? Math.max(0, available - SAFE_RESERVE) : available;
+    setAmount(safeAmount.toString());
+  };
+
+  const preview = (() => {
     const val = parseFloat(amount);
-    if (isNaN(val) || val <= 0) return "0.00";
-    
-    let usdtVal = 0;
-    if (convertFromAsset === "USDT") usdtVal = val;
-    else {
-      const price = marketData[convertFromAsset]?.price || 0;
-      usdtVal = val * price;
-    }
+    if (isNaN(val) || val <= 0) return null;
+    const fromPrice = convertFromAsset === "USDT" ? 1 : (marketData[convertFromAsset]?.price || 0);
+    const toPrice = toAsset === "USDT" ? 1 : (marketData[toAsset]?.price || 0);
+    if (!fromPrice || !toPrice) return null;
+    const usdtVal = val * fromPrice;
+    return {
+      amount: toAsset === "USDT" ? usdtVal.toFixed(2) : (usdtVal / toPrice).toFixed(6),
+      usdValue: usdtVal.toFixed(2),
+    };
+  })();
 
-    if (toAsset === "USDT") return usdtVal.toFixed(2);
-    const toPrice = marketData[toAsset]?.price || 0;
-    return toPrice > 0 ? (usdtVal / toPrice).toFixed(4) : "0.00";
-  };
+  const fromBalance = balances[convertFromAsset] || 0;
+  const fromUsdValue = convertFromAsset === "USDT" ? fromBalance : fromBalance * (marketData[convertFromAsset]?.price || 0);
+
+  if (!isMounted) return <div className="rounded-2xl border border-white/[0.07] bg-white/[0.02] h-full shrink-0 animate-pulse" />;
 
   return (
-    <div className="glass-panel p-4 sm:p-5 rounded-3xl border border-white/5 h-[360px] flex flex-col bg-white/[0.01]">
-      <div className="flex items-center justify-between mb-6 shrink-0">
-        <h3 className="text-[10px] sm:text-[11px] font-mono text-white/30 uppercase tracking-[0.3em] flex items-center gap-2">
-          <ArrowRightLeft size={12} className="text-blue-400" /> CONVERSION
-        </h3>
-        <Zap size={10} className="text-yellow-500 animate-pulse" />
+    <div className="rounded-2xl border border-white/[0.07] bg-[#111827]/50 backdrop-blur-xl h-full flex flex-col overflow-hidden">
+      {/* Header */}
+      <div className="px-5 py-3 border-b border-white/[0.06] flex items-center justify-between shrink-0">
+        <div className="flex items-center gap-2">
+          <ArrowDownUp size={14} className="text-blue-400" />
+          <span className="text-[11px] font-mono font-bold text-white/60 uppercase tracking-widest">Swap</span>
+        </div>
+        {status === "success" && <span className="text-[10px] font-bold text-emerald-400 animate-pulse">✓ Done</span>}
+        {status === "error" && <span className="text-[10px] font-bold text-red-400">✗ Failed</span>}
       </div>
 
-      <div className="flex-1 space-y-4 sm:space-y-6">
-        <div className="space-y-2">
-          <label className="text-[8px] uppercase font-mono text-white/20 ml-2 tracking-widest">Source</label>
-          <div className="flex gap-2">
-            <select 
-              value={convertFromAsset} 
-              onChange={(e) => setConvertFromAsset(e.target.value)}
-              className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-3 text-[10px] font-mono text-white appearance-none"
-            >
-              {assets.map(a => <option key={a} value={a} className="bg-neutral-900">{a}</option>)}
-            </select>
-            <input 
-              type="number" 
+      {/* Body */}
+      <div className="flex-1 px-5 py-4 flex flex-col justify-between">
+        {/* FROM */}
+        <div className="rounded-xl bg-white/[0.03] border border-white/[0.06] p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[9px] font-mono text-white/30 uppercase tracking-wider font-bold">You Pay</span>
+            <button onClick={handleMax} className="text-[9px] font-mono font-bold text-blue-400 hover:text-blue-300 transition-colors">MAX</button>
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
               placeholder="0.00"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
-              className="w-1/2 bg-white/5 border border-white/10 rounded-xl px-3 py-3 text-[10px] font-mono text-white focus:border-blue-500/50"
+              className="flex-1 bg-transparent text-[20px] font-black font-mono text-white placeholder-white/15 focus:outline-none min-w-0"
             />
-          </div>
-          <div className="flex items-center justify-between px-2">
-            <div className="text-[8px] font-mono text-white/10">{balances[convertFromAsset]?.toLocaleString() || 0} {convertFromAsset}</div>
-            <button 
-              onClick={() => {
-                const available = balances[convertFromAsset] || 0;
-                const safeAmount = convertFromAsset === "USDT" ? Math.max(0, available - 10.0) : available;
-                setAmount(safeAmount.toString());
-              }}
-              className="text-[8px] font-mono font-bold text-blue-400/80 hover:text-blue-400"
+            <select
+              value={convertFromAsset}
+              onChange={(e) => setConvertFromAsset(e.target.value)}
+              className="bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-[12px] font-mono font-bold text-white appearance-none cursor-pointer hover:bg-white/10 transition-all"
             >
-              MAX
-            </button>
+              {assets.map(a => <option key={a} value={a} className="bg-[#1a1f2e]">{a}</option>)}
+            </select>
+          </div>
+          <div className="flex items-center gap-1.5 text-[9px] text-white/25 font-mono">
+            <Wallet size={9} />
+            <span>{fromBalance < 0.001 ? fromBalance.toFixed(6) : fromBalance.toLocaleString('en-US', { maximumFractionDigits: 4 })}</span>
+            <span className="text-white/15">≈ ${fromUsdValue.toFixed(2)}</span>
           </div>
         </div>
 
+        {/* SWAP BUTTON */}
         <div className="flex justify-center -my-2 relative z-10">
-          <button 
-            onClick={() => {
-              const temp = convertFromAsset;
-              setConvertFromAsset(toAsset);
-              setToAsset(temp);
-            }}
-            className="p-2.5 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-all"
+          <button
+            onClick={handleFlip}
+            className="w-9 h-9 rounded-xl bg-[#1e2536] border border-white/10 flex items-center justify-center hover:bg-white/10 hover:border-white/20 transition-all shadow-lg"
           >
-            <RefreshCw size={12} className="text-white/30" />
+            <ArrowDownUp size={14} className="text-white/50" />
           </button>
         </div>
 
-        <div className="space-y-2">
-          <label className="text-[8px] uppercase font-mono text-white/20 ml-2 tracking-widest">Target</label>
-          <select 
-            value={toAsset} 
-            onChange={(e) => setToAsset(e.target.value)}
-            className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-3 text-[10px] font-mono text-white appearance-none"
-          >
-            {assets.map(a => <option key={a} value={a} className="bg-neutral-900">{a}</option>)}
-          </select>
-          <div className="mt-2 p-3 sm:p-4 rounded-2xl bg-white/[0.02] border border-white/[0.05]">
-            <div className="text-[7px] uppercase font-mono text-white/20 mb-1">Receipt Estimate</div>
-            <div className="text-base sm:text-lg font-black font-mono text-blue-400">
-              {calculatePreview()} <span className="text-[9px] text-white/20 font-normal">{toAsset}</span>
+        {/* TO */}
+        <div className="rounded-xl bg-white/[0.03] border border-white/[0.06] p-3 space-y-2">
+          <span className="text-[9px] font-mono text-white/30 uppercase tracking-wider font-bold">You Receive</span>
+          <div className="flex items-center gap-2">
+            <div className="flex-1 text-[20px] font-black font-mono text-white/80 min-w-0 truncate">
+              {preview ? preview.amount : <span className="text-white/15">0.00</span>}
             </div>
+            <select
+              value={toAsset}
+              onChange={(e) => setToAsset(e.target.value)}
+              className="bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-[12px] font-mono font-bold text-white appearance-none cursor-pointer hover:bg-white/10 transition-all"
+            >
+              {assets.map(a => <option key={a} value={a} className="bg-[#1a1f2e]">{a}</option>)}
+            </select>
           </div>
+          {preview && (
+            <div className="text-[9px] text-white/25 font-mono">≈ ${preview.usdValue} USD</div>
+          )}
         </div>
       </div>
 
-      <button 
-        onClick={handleSwap}
-        disabled={status !== "idle"}
-        className={`w-full py-4 mt-6 rounded-2xl font-mono text-[10px] font-black uppercase tracking-widest transition-all ${
-          status === "success" ? "bg-green-500 text-black" : 
-          status === "error" ? "bg-red-500 text-white" : 
-          "bg-blue-600 hover:bg-blue-500 text-white"
-        }`}
-      >
-        {status === "success" ? "SUCCESS" : status === "error" ? "FAILED" : "EXECUTE SWAP"}
-      </button>
+      {/* Execute */}
+      <div className="px-5 pb-4">
+        <button
+          onClick={handleSwap}
+          disabled={status !== "idle" || !preview}
+          className={`w-full py-3 rounded-xl font-mono text-[11px] font-black uppercase tracking-widest transition-all ${
+            status === "success" ? "bg-emerald-500 text-black" :
+            status === "error" ? "bg-red-500 text-white" :
+            !preview ? "bg-white/5 text-white/20 cursor-not-allowed" :
+            "bg-blue-500 hover:bg-blue-400 text-white shadow-[0_0_20px_rgba(59,130,246,0.2)]"
+          }`}
+        >
+          {status === "success" ? "✓ Swap Complete" : status === "error" ? "✗ Swap Failed" : "Execute Swap"}
+        </button>
+      </div>
     </div>
   );
 }

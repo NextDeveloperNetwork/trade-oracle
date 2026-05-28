@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Search, Plus, Trash2, TrendingUp, Info, Activity, Star, Sparkles, Zap, ChevronRight } from "lucide-react";
 import { useTradingEngine } from "@/context/TradingContext";
+import { STRATEGY_INFO } from "@/lib/strategies";
 import { motion, AnimatePresence } from "framer-motion";
 
 type MarketData = {
@@ -21,13 +22,18 @@ export default function MarketsPage() {
   const [allCoins, setAllCoins] = useState<MarketData[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
-  const [filterMode, setFilterMode] = useState<"all" | "gainers" | "promising" | "volatile" | "bot">("all");
+  type FilterMode = "all" | "gainers" | "promising" | "volatile" | "bot";
+  const [filterMode, setFilterMode] = useState<FilterMode>("all");
   const [selectedBotFilter, setSelectedBotFilter] = useState<string>("SCALPER");
+
+  const ORACLE_AUTH_TOKEN = "oracle_default_secret_9988";
 
   useEffect(() => {
     async function fetchMarkets() {
       try {
-        const res = await fetch("/api/binance?type=exchangeInfo");
+        const res = await fetch("/api/binance?type=exchangeInfo", {
+          headers: { "x-oracle-token": ORACLE_AUTH_TOKEN }
+        });
         const data = await res.json();
         setAllCoins(Array.isArray(data) ? data : []);
       } catch (e) {
@@ -91,18 +97,7 @@ export default function MarketsPage() {
     return list.slice(0, 100);
   }, [allCoins, searchTerm, filterMode, selectedBotFilter]);
 
-  const STRATEGY_INFO: Record<string, { name: string, desc: string, color: string, risk: string }> = {
-    SCALPER:    { name: "EMA Scalper",      desc: "5/30 EMA crossover",         color: "text-[var(--color-crypto-green)]", risk: "LOW" },
-    TREND:      { name: "Trend Follower",   desc: "10-tick momentum tracking",   color: "text-blue-400",                   risk: "LOW" },
-    REVERSION:  { name: "Mean Reversion",   desc: "Sell highs, buy dips",        color: "text-orange-400",                 risk: "MED" },
-    BREAKOUT:   { name: "Breakout Hunter",  desc: "20-period high/low breaks",   color: "text-yellow-400",                 risk: "MED" },
-    MOMENTUM:   { name: "RSI Momentum",     desc: "Oversold/overbought RSI",     color: "text-cyan-400",                   risk: "MED" },
-    VWAP:       { name: "VWAP Trader",      desc: "Price vs 50-tick VWAP",       color: "text-purple-400",                 risk: "LOW" },
-    AGGRESSIVE: { name: "Aggressive Bot",   desc: "3/20 EMA + RSI combo",        color: "text-pink-400",                   risk: "HIGH" },
-    SWING:      { name: "Swing Trader",     desc: "12/50 EMA + Bollinger",       color: "text-amber-400",                  risk: "MED" },
-    HYPER:      { name: "Hyper Scalper",    desc: "2/8-tick HF momentum",        color: "text-red-400",                    risk: "HIGH" },
-    SNIPER:     { name: "Sniper Bot",       desc: "Bollinger extreme sniper",    color: "text-rose-400",                   risk: "HIGH" },
-  };
+
 
   return (
     <div className="max-w-7xl mx-auto py-6 sm:py-12 px-4 sm:px-6 mb-20 sm:mb-0">
@@ -122,7 +117,7 @@ export default function MarketsPage() {
             ].map(f => (
               <button 
                 key={f.id}
-                onClick={() => setFilterMode(f.id as any)}
+                onClick={() => setFilterMode(f.id as FilterMode)}
                 className={`px-4 py-2 rounded-xl font-mono text-[9px] tracking-widest uppercase border transition-all whitespace-nowrap flex items-center gap-1.5 ${
                   filterMode === f.id 
                     ? 'bg-white/10 border-white/20 text-white' 
@@ -154,7 +149,7 @@ export default function MarketsPage() {
                 onChange={(e) => setSelectedBotFilter(e.target.value)}
                 className="bg-transparent text-[10px] font-mono font-bold text-cyan-300 outline-none cursor-pointer appearance-none flex-1"
               >
-                {Object.keys(STRATEGY_INFO).map(s => (
+                {(Object.keys(STRATEGY_INFO) as (keyof typeof STRATEGY_INFO)[]).map(s => (
                   <option key={s} value={s} className="bg-neutral-900 text-white">
                     {STRATEGY_INFO[s].name}
                   </option>

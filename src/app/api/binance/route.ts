@@ -6,14 +6,26 @@ const SECRET_KEY = process.env.BINANCE_SECRET_KEY;
 const IS_US = process.env.IS_BINANCE_US === "true";
 const BASE_URL = IS_US ? "https://api.binance.us" : "https://api.binance.com";
 
-function generateSignature(queryString: string) {
+function generateSignature(queryString: string, secret: string) {
   return crypto
-    .createHmac("sha256", SECRET_KEY!)
+    .createHmac("sha256", secret)
     .update(queryString)
     .digest("hex");
 }
 
+function authenticate(req: Request) {
+  const authHeader = req.headers.get("x-oracle-token");
+  const INTERNAL_SECRET = "oracle_default_secret_9988";
+  const ok = authHeader === INTERNAL_SECRET;
+  if (!ok) console.warn("Unauthorized API attempt detected", { received: authHeader });
+  return ok;
+}
+
 export async function GET(req: Request) {
+  if (!authenticate(req)) {
+    return NextResponse.json({ error: "Unauthorized access" }, { status: 401 });
+  }
+
   if (!API_KEY || !SECRET_KEY) {
     return NextResponse.json({ error: "API Keys not configured" }, { status: 500 });
   }
@@ -34,13 +46,13 @@ export async function GET(req: Request) {
         }, { status: 451 });
       }
 
-      const infoData = await infoRes.json();
-      const tickerData = await tickerRes.json();
-
       if (infoRes.status === 429 || tickerRes.status === 429) {
         console.error("Binance Rate Limited (429)");
         return NextResponse.json({ error: "Rate limited", retryAfter: infoRes.headers.get("Retry-After") }, { status: 429 });
       }
+
+      const infoData = await infoRes.json();
+      const tickerData = await tickerRes.json();
 
       if (!infoData.symbols || !Array.isArray(tickerData)) {
         console.error("Invalid Binance API Response", { infoData, tickerData });
@@ -54,6 +66,13 @@ export async function GET(req: Request) {
         .filter((s: any) => s.quoteAsset === "USDT" && s.status === "TRADING")
         .map((s: any) => {
           const ticker = tickerMap.get(s.symbol) || {};
+          
+          // Extract filters
+          const priceFilter = s.filters.find((f: any) => f.filterType === "PRICE_FILTER");
+          const lotSizeFilter = s.filters.find((f: any) => f.filterType === "LOT_SIZE");
+          const notionalFilter = s.filters.find((f: any) => f.filterType === "NOTIONAL") || 
+                                 s.filters.find((f: any) => f.filterType === "MIN_NOTIONAL");
+
           return {
             symbol: s.symbol,
             baseAsset: s.baseAsset,
@@ -63,6 +82,12 @@ export async function GET(req: Request) {
             volume: ticker.quoteVolume || "0",
             high: ticker.highPrice || "0",
             low: ticker.lowPrice || "0",
+            filters: {
+              tickSize: priceFilter?.tickSize || "0.01",
+              stepSize: lotSizeFilter?.stepSize || "0.01",
+              minQty: lotSizeFilter?.minQty || "0.01",
+              minNotional: notionalFilter?.minNotional || notionalFilter?.notional || "10.0"
+            }
           };
         });
         
@@ -74,8 +99,8 @@ export async function GET(req: Request) {
   }
 
   const timestamp = Date.now();
-  const queryString = `timestamp=${timestamp}&recvWindow=60000`;
-  const signature = generateSignature(queryString);
+  const queryString = `timestamp=${timestamp}&recvWindow=5000`; // Reduced window for security
+  const signature = generateSignature(queryString, SECRET_KEY);
 
   try {
     const response = await fetch(`${BASE_URL}/api/v3/account?${queryString}&signature=${signature}`, {
@@ -95,7 +120,12 @@ export async function GET(req: Request) {
       console.error("Binance API Error:", data);
       return NextResponse.json(data, { status: response.status });
     }
-    return NextResponse.json(data);
+    
+    // Security: Only return balances to the frontend, not full account metadata
+    return NextResponse.json({
+      balances: data.balances || [],
+      accountType: data.accountType
+    });
   } catch (error) {
     console.error("Binance Fetch Error:", error);
     return NextResponse.json({ error: "Failed to fetch account info" }, { status: 500 });
@@ -103,26 +133,38 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  if (!authenticate(req)) {
+    return NextResponse.json({ error: "Unauthorized access" }, { status: 401 });
+  }
+
   if (!API_KEY || !SECRET_KEY) {
     return NextResponse.json({ error: "API Keys not configured" }, { status: 500 });
   }
 
   try {
-    const { symbol, side, quantity, usdtAmount } = await req.json();
+    const body = await req.json();
+    const { symbol, side, quantity, usdtAmount } = body;
+
+    // 1. STRICT VALIDATION
+    if (!["BUY", "SELL"].includes(side?.toUpperCase())) {
+      return NextResponse.json({ error: "Invalid trading side" }, { status: 400 });
+    }
+    if (typeof symbol !== "string" || !/^[A-Z0-9]{2,12}$/.test(symbol.toUpperCase())) {
+      return NextResponse.json({ error: "Invalid symbol format" }, { status: 400 });
+    }
+
     const timestamp = Date.now();
+    const upperSym = symbol.toUpperCase();
+    const pair = upperSym.endsWith("USDT") ? upperSym : `${upperSym}USDT`;
     
-    // Binance requirements: Symbol must be uppercase, e.g., BTCUSDT
-    const pair = `${symbol}USDT`.toUpperCase();
-    
-    let queryString = `symbol=${pair}&side=${side.toUpperCase()}&type=MARKET&timestamp=${timestamp}&recvWindow=60000`;
+    let queryString = `symbol=${pair}&side=${side.toUpperCase()}&type=MARKET&timestamp=${timestamp}&recvWindow=5000`;
     if (side.toUpperCase() === "BUY" && usdtAmount) {
-      // Use quoteOrderQty for buys to bypass LOT_SIZE precision math
       queryString += `&quoteOrderQty=${usdtAmount}`;
     } else {
       queryString += `&quantity=${quantity}`;
     }
     
-    const signature = generateSignature(queryString);
+    const signature = generateSignature(queryString, SECRET_KEY);
 
     const response = await fetch(`${BASE_URL}/api/v3/order?${queryString}&signature=${signature}`, {
       method: "POST",
@@ -132,8 +174,14 @@ export async function POST(req: Request) {
     });
 
     const data = await response.json();
+    
+    if (!response.ok) {
+       console.error("Binance Order Error:", { status: response.status, data });
+    }
+    
     return NextResponse.json(data);
-  } catch (error) {
+  } catch (error: any) {
+    console.error("Route POST error:", error.message);
     return NextResponse.json({ error: "Failed to place order" }, { status: 500 });
   }
 }

@@ -1,12 +1,16 @@
+
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
-import { TrendingUp, TrendingDown, Activity, Wallet, PlusCircle, ShieldCheck, Zap, Download, ChevronDown } from "lucide-react";
+import { Activity, PlusCircle, Zap, Download, ChevronDown, XCircle, TrendingUp, TrendingDown, RefreshCw, BarChart2, Cpu } from "lucide-react";
 import { motion as m, AnimatePresence as AP } from "framer-motion";
-import { useTradingEngine, BotStrategy } from "@/context/TradingContext";
+import { useTradingEngine, BotStrategy, SAFE_RESERVE, MAX_OPEN_POSITIONS, Candle } from "@/context/TradingContext";
+import { STRATEGY_INFO } from "@/lib/strategies";
 import TradeMap from "./TradeMap";
 import TriangulationTool from "./TriangulationTool";
+import MainCandleChart from "./MainCandleChart";
 import HoldingsTable from "./HoldingsTable";
+import NeuralStatus from "./NeuralStatus";
 import Link from "next/link";
 
 const getDecimals = (symbol: string) => {
@@ -15,311 +19,538 @@ const getDecimals = (symbol: string) => {
   return 4;
 };
 
-const STRATEGY_INFO: Record<BotStrategy, { name: string, desc: string, color: string, risk: string }> = {
-  SCALPER:    { name: "EMA Scalper",      desc: "5/30 EMA crossover",         color: "text-[var(--color-crypto-green)]", risk: "LOW" },
-  TREND:      { name: "Trend Follower",   desc: "10-tick momentum tracking",   color: "text-blue-400",                   risk: "LOW" },
-  REVERSION:  { name: "Mean Reversion",   desc: "Sell highs, buy dips",        color: "text-orange-400",                 risk: "MED" },
-  BREAKOUT:   { name: "Breakout Hunter",  desc: "20-period high/low breaks",   color: "text-yellow-400",                 risk: "MED" },
-  MOMENTUM:   { name: "RSI Momentum",     desc: "Oversold/overbought RSI",     color: "text-cyan-400",                   risk: "MED" },
-  VWAP:       { name: "VWAP Trader",      desc: "Price vs 50-tick VWAP",       color: "text-purple-400",                 risk: "LOW" },
-  AGGRESSIVE: { name: "Aggressive Bot",   desc: "3/20 EMA + RSI combo",        color: "text-pink-400",                   risk: "HIGH" },
-  SWING:      { name: "Swing Trader",     desc: "12/50 EMA + Bollinger",       color: "text-amber-400",                  risk: "MED" },
-  HYPER:      { name: "Hyper Scalper",    desc: "2/8-tick HF momentum",        color: "text-red-400",                    risk: "HIGH" },
-  SNIPER:     { name: "Sniper Bot",       desc: "Bollinger extreme sniper",    color: "text-rose-400",                   risk: "HIGH" },
-};
+function CandleChartMini({ data }: { data: Candle[] }) {
+  if (!data || data.length < 2) return <div className="h-10 w-full bg-white/5 rounded-lg animate-pulse" />;
+  
+  const relevant = data.slice(-20);
+  const min = Math.min(...relevant.map(c => c.l));
+  const max = Math.max(...relevant.map(c => c.h));
+  const range = max - min || 1;
+  const h = 40;
+  const w = 140;
+  const cw = w / 20;
 
-export default function CryptoDashboard() {
-  const { 
-    balances, 
-    setUSDTBalance, 
-    executeTrade, 
-    marketData, 
-    signalsLog, 
-    tradeHistory, 
-    isAutoTrading, 
-    toggleAutoTrading, 
-    currentStrategy,
-    setStrategy,
-    totalUSDT, 
-    totalProfit, 
-    isLiveMode, 
-    toggleLiveMode, 
-    syncBalances,
-    activeCoins,
-    notifications,
-    snapshots
-  } = useTradingEngine();
+  return (
+    <svg width={w} height={h} className="mt-2 overflow-visible">
+      {relevant.map((c, i) => {
+        const isUp = c.c >= c.o;
+        const color = isUp ? "#00c087" : "#ff3b57";
+        const x = i * cw;
+        const yHigh = ((max - c.h) / range) * h;
+        const yLow = ((max - c.l) / range) * h;
+        const yOpen = ((max - c.o) / range) * h;
+        const yClose = ((max - c.c) / range) * h;
+        
+        return (
+          <g key={i}>
+            <line x1={x + cw/2} y1={yHigh} x2={x + cw/2} y2={yLow} stroke={color} strokeWidth="1" opacity={0.5} />
+            <rect 
+              x={x + 1} y={Math.min(yOpen, yClose)} 
+              width={cw - 2} height={Math.max(1, Math.abs(yOpen - yClose))} 
+              fill={color} 
+            />
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
 
-  const [usdtInput, setUsdtInput] = useState("");
-  const [period, setPeriod] = useState<string>("ALL");
+function Sparkline({ data, color }: { data: number[]; color: string }) {
+  if (data.length < 2) return <div className="h-[30px] flex items-center justify-center text-[8px] text-white/5 uppercase font-bold tracking-widest">Collecting Data…</div>;
+  const min = Math.min(...data);
+  const max = Math.max(...data);
+  const range = max - min || 1;
+  const width = 100;
+  const height = 30;
+  const points = data.map((d, i) => ({
+    x: (i / (data.length - 1)) * width,
+    y: height - ((d - min) / range) * height,
+  }));
+  const path = `M ${points.map(p => `${p.x},${p.y}`).join(" L ")}`;
+  return (
+    <div className="h-[30px] w-full mt-1 overflow-hidden">
+      <svg width="100%" height="100%" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" className="overflow-visible">
+        <m.path 
+          initial={{ pathLength: 0, opacity: 0 }}
+          animate={{ pathLength: 1, opacity: 1 }}
+          d={path} 
+          fill="none" 
+          stroke={color} 
+          strokeWidth="1.5" 
+          strokeLinecap="round" 
+          strokeLinejoin="round" 
+        />
+      </svg>
+    </div>
+  );
+}
 
-  const periods = [
-    { label: '1m', ms: 60 * 1000 },
-    { label: '5m', ms: 5 * 60 * 1000 },
-    { label: '30m', ms: 30 * 60 * 1000 },
-    { label: '1h', ms: 60 * 60 * 1000 },
-    { label: '24h', ms: 24 * 60 * 60 * 1000 },
-    { label: '1w', ms: 7 * 24 * 60 * 60 * 1000 },
-    { label: '1mo', ms: 30 * 24 * 60 * 60 * 1000 },
-    { label: '1y', ms: 365 * 24 * 60 * 60 * 1000 },
-    { label: 'ALL', ms: Infinity }
-  ];
-
-  const getPeriodPnL = () => {
-    if (period === "ALL") return totalProfit;
-    const p = periods.find(x => x.label === period);
-    if (!p || !snapshots || snapshots.length === 0) return 0;
-    
-    const targetTime = Date.now() - p.ms;
-    let closest = snapshots[0];
-    let minDiff = Math.abs(snapshots[0].t - targetTime);
-
-    for (const s of snapshots) {
-      const diff = Math.abs(s.t - targetTime);
-      if (diff < minDiff) {
-        minDiff = diff;
-        closest = s;
-      }
-    }
-    return totalUSDT - closest.v;
-  };
-
-  const periodPnL = getPeriodPnL();
-  const [activeLogTab, setActiveLogTab] = useState<"signals" | "trades">("signals");
-  const [dropdownOpen, setDropdownOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-
-  // Overlay for notifications
-  const NotificationOverlay = () => (
-    <div className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-3 pointer-events-none">
+type NotificationOverlayProps = { notifications: { id: string; msg: string; type: "error" | "info" | "success" }[] };
+function NotificationOverlay({ notifications }: NotificationOverlayProps) {
+  return (
+    <div className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-2 pointer-events-none">
       <AP>
         {notifications.map(n => (
           <m.div
             key={n.id}
-            initial={{ opacity: 0, x: 50, scale: 0.9 }}
-            animate={{ opacity: 1, x: 0, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.2 } }}
-            className={`pointer-events-auto px-4 py-3 rounded-xl border shadow-2xl backdrop-blur-xl flex items-center gap-3 min-w-[280px] ${
-              n.type === 'error' ? 'bg-red-500/20 border-red-500/50 text-red-100' :
-              n.type === 'success' ? 'bg-green-500/20 border-green-500/50 text-green-100' :
-              'bg-blue-500/20 border-blue-500/50 text-blue-100'
+            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.15 } }}
+            className={`pointer-events-auto px-4 py-3 rounded-xl border shadow-2xl backdrop-blur-xl flex items-center gap-3 min-w-[300px] ${
+              n.type === "error" ? "bg-red-950/80 border-red-500/40 text-red-100" :
+              n.type === "success" ? "bg-green-950/80 border-green-500/40 text-green-100" :
+              "bg-blue-950/80 border-blue-500/40 text-blue-100"
             }`}
           >
-            <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${
-              n.type === 'error' ? 'bg-red-500' : n.type === 'success' ? 'bg-green-500' : 'bg-blue-500'
+            <div className={`w-2 h-2 rounded-full shrink-0 animate-pulse ${
+              n.type === "error" ? "bg-red-400" : n.type === "success" ? "bg-green-400" : "bg-blue-400"
             }`} />
-            <span className="text-[11px] font-mono font-bold">{n.msg}</span>
+            <span className="text-[12px] font-mono font-semibold">{n.msg}</span>
           </m.div>
         ))}
       </AP>
     </div>
   );
+}
+
+export default function CryptoDashboard() {
+  const {
+    balances,
+    setUSDTBalance,
+    executeTrade,
+    marketData,
+    signalsLog,
+    tradeHistory,
+    isAutoTrading,
+    toggleAutoTrading,
+    currentStrategy,
+    setStrategy,
+    totalUSDT,
+    totalProfit,
+    isLiveMode,
+    toggleLiveMode,
+    syncBalances,
+    activeCoins,
+    notifications,
+    snapshots,
+    openPositions,
+    resetAll,
+    resetPnL,
+    removeCoin
+  } = useTradingEngine();
+
+  const [usdtInput, setUsdtInput] = useState("");
+  const [period, setPeriod] = useState<string>("ALL");
+  const [activeLogTab, setActiveLogTab] = useState<"signals" | "trades">("signals");
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
+  const [contextStrategy, setContextStrategy] = useState<BotStrategy | null>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const periods = [
+    { label: "1m", ms: 60_000 }, { label: "5m", ms: 300_000 },
+    { label: "1h", ms: 3_600_000 }, { label: "24h", ms: 86_400_000 },
+    { label: "ALL", ms: Infinity },
+  ];
+
+  const getPeriodPnL = () => {
+    if (period === "ALL") return totalProfit;
+    const p = periods.find(x => x.label === period);
+    if (!p || snapshots.length === 0) return 0;
+    const targetTime = Date.now() - p.ms;
+    let closest = snapshots[0];
+    let minDiff = Math.abs(snapshots[0].t - targetTime);
+    for (const s of snapshots) {
+      const diff = Math.abs(s.t - targetTime);
+      if (diff < minDiff) { minDiff = diff; closest = s; }
+    }
+    return totalUSDT - closest.v;
+  };
+
+  const periodPnL = getPeriodPnL();
 
   useEffect(() => {
+    setIsMounted(true);
     const handler = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) setDropdownOpen(false);
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false);
+        setContextStrategy(null);
+      }
     };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
   }, []);
 
   const handleUpdateBalance = () => {
     const val = parseFloat(usdtInput);
-    if (!isNaN(val)) {
-      setUSDTBalance(val);
-      setUsdtInput("");
-    }
+    if (!isNaN(val)) { setUSDTBalance(val); setUsdtInput(""); }
   };
 
   const getPriceColor = (coin: string) => {
-    const state = marketData[coin];
-    if (!state || !state.prevPrice || !state.price || state.price === state.prevPrice) return "text-gray-200";
-    return state.price > state.prevPrice ? "text-[var(--color-crypto-green)]" : "text-[var(--color-crypto-red)]";
+    const s = marketData[coin];
+    if (!s?.price || !s?.prevPrice || s.price === s.prevPrice) return "text-white";
+    return s.price > s.prevPrice ? "text-emerald-400" : "text-red-400";
   };
 
   const downloadLogs = () => {
     const logs = activeLogTab === "signals" ? signalsLog : tradeHistory;
-    if (logs.length === 0) return;
+    if (!logs.length) return;
     const headers = Object.keys(logs[0]).join(",");
     const rows = logs.map(l => Object.values(l).join(",")).join("\n");
-    const csvContent = "data:text/csv;charset=utf-8," + headers + "\n" + rows;
-    const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
+    link.setAttribute("href", encodeURI("data:text/csv;charset=utf-8," + headers + "\n" + rows));
     link.setAttribute("download", `oracle_${activeLogTab}_${Date.now()}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    document.body.appendChild(link); link.click(); document.body.removeChild(link);
   };
 
-  return (
-    <div className="max-w-7xl mx-auto py-4 sm:py-6 px-3 sm:px-4 mb-10 sm:mb-0">
-      <NotificationOverlay />
-      
-      {/* High-Density Stats Bar */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 mb-4">
-        <div className="glass-panel p-2.5 rounded-xl border border-white/5 bg-white/[0.01] flex flex-col justify-between h-20 sm:h-auto">
-          <div>
-            <div className="text-[8px] sm:text-[9px] font-mono text-white/30 uppercase tracking-widest mb-1">Portfolio</div>
-            <div className="text-base sm:text-lg font-black font-mono tracking-tighter text-white">
-              ${totalUSDT.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-            </div>
-          </div>
-          {!isLiveMode && (
-            <div className="mt-2 flex items-center gap-1.5 border-t border-white/5 pt-2">
-              <input 
-                type="number" 
-                placeholder="Set..." 
-                className="bg-white/5 border border-white/10 rounded px-1.5 py-1 text-[8px] sm:text-[9px] w-14 sm:w-20 font-mono text-white" 
-                value={usdtInput} 
-                onChange={(e) => setUsdtInput(e.target.value)} 
-              />
-              <button onClick={handleUpdateBalance} className="bg-white/10 hover:bg-white/20 text-white/80 px-2 py-1 rounded text-[8px] sm:text-[9px] font-mono font-bold">SET</button>
-            </div>
-          )}
-        </div>
-        
-        <div className="glass-panel p-2.5 rounded-xl border border-white/5 bg-white/[0.01] flex flex-col justify-between h-20 sm:h-auto">
-          <div>
-            <div className="text-[8px] sm:text-[9px] font-mono text-white/30 uppercase tracking-widest mb-1">P&L ({period})</div>
-            <div className={`text-base sm:text-lg font-black font-mono tracking-tighter ${periodPnL >= 0 ? 'text-[var(--color-crypto-green)]' : 'text-[var(--color-crypto-red)]'}`}>
-              {periodPnL >= 0 ? '+' : ''}${Math.abs(periodPnL).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-            </div>
-          </div>
-          <div className="mt-1 flex flex-wrap gap-1">
-            {periods.filter(p => !['1y', '1mo'].includes(p.label)).map(p => (
-              <button key={p.label} onClick={() => setPeriod(p.label)} className={`text-[6px] sm:text-[7px] font-mono px-1 py-0.5 rounded transition-all ${period === p.label ? 'bg-white/20 text-white' : 'text-white/30'}`}>
-                {p.label}
-              </button>
-            ))}
-            <button key="ALL" onClick={() => setPeriod("ALL")} className={`text-[6px] sm:text-[7px] font-mono px-1 py-0.5 rounded transition-all ${period === "ALL" ? 'bg-white/20 text-white' : 'text-white/30'}`}>ALL</button>
-          </div>
-        </div>
+  const pnlPositive = periodPnL >= 0;
+  const availableUsdt = Math.max(0, (balances.USDT || 0) - SAFE_RESERVE);
 
-        <div className="glass-panel p-2.5 rounded-xl border border-white/5 bg-white/[0.01] flex items-center justify-between relative z-[60]" ref={dropdownRef}>
-          <div className="flex flex-col flex-1 min-w-0">
-            <div className="text-[8px] sm:text-[9px] font-bold font-mono mb-1 text-[var(--color-crypto-green)]">BOT {isAutoTrading ? 'ACTIVE' : 'OFF'}</div>
-            <div className="relative">
-              <button onClick={() => setDropdownOpen(!dropdownOpen)} className="flex items-center gap-1 text-[9px] sm:text-[10px] font-mono font-bold text-white/70">
+  return (
+    <div className="w-full min-h-screen bg-[var(--color-crypto-bg)] text-[var(--color-crypto-text)]">
+      <NotificationOverlay notifications={notifications} />
+
+      {/* ── TOP HEADER BAR ─────────────────────────────────────────────── */}
+      <header className="border-b border-white/5 bg-[#1e2a4a]/80 backdrop-blur-xl sticky top-0 z-50 px-8 lg:px-12 py-3 shadow-2xl">
+        <div className="flex items-center justify-between gap-4">
+          {/* Logo */}
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center">
+              <BarChart2 size={16} className="text-emerald-400" />
+            </div>
+            <div>
+              <div className="text-[13px] font-black tracking-widest text-white uppercase">Crypto Oracle</div>
+              <div className="text-[9px] font-mono text-white/30 uppercase tracking-widest">Trading Engine v2</div>
+            </div>
+          </div>
+
+          {/* Center Stats */}
+          <div className="hidden md:flex items-center gap-6">
+            <div className="text-center group relative cursor-help">
+              <div className="text-[9px] text-[var(--color-crypto-muted)] uppercase tracking-widest font-bold">Total Portfolio</div>
+              <div className="text-[15px] font-black font-mono text-[var(--color-crypto-text)]">${isMounted ? totalUSDT.toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 4 }) : '0.0000'}</div>
+              <div className="text-[8px] text-white/20 uppercase font-black tracking-tighter">Equity + Cash</div>
+            </div>
+            <div className="w-px h-8 bg-[var(--color-crypto-border)]" />
+            <div className="text-center group/pnl">
+              <div className="flex items-center justify-center gap-1.5 translate-x-3">
+                <div className="text-[9px] text-[var(--color-crypto-muted)] uppercase tracking-widest font-bold">Total P&L</div>
+                <button 
+                  onClick={() => { if(confirm("Reset P&L to $0.00 base?")) resetPnL(); }}
+                  className="opacity-0 group-hover/pnl:opacity-100 p-0.5 rounded bg-white/5 border border-white/10 text-white/20 hover:text-white transition-all"
+                  title="Zero-point P&L Baseline"
+                >
+                  <RefreshCw size={8} />
+                </button>
+              </div>
+              <div className={`text-[15px] font-black font-mono ${totalProfit >= 0 ? "text-[var(--color-crypto-green)]" : "text-[var(--color-crypto-red)]"}`}>
+                {totalProfit >= 0 ? "+" : ""}${isMounted ? Math.abs(totalProfit).toFixed(4) : '0.0000'}
+              </div>
+              <div className="text-[8px] text-white/20 uppercase font-black tracking-tighter">Lifetime Net</div>
+            </div>
+            <div className="w-px h-8 bg-[var(--color-crypto-border)]" />
+            <div className="text-center">
+              <div className="text-[9px] text-[var(--color-crypto-muted)] uppercase tracking-widest font-bold">Open Slots</div>
+              <div className="text-[15px] font-black font-mono text-[var(--color-crypto-text)]">{openPositions.length}<span className="text-[var(--color-crypto-muted)]">/{MAX_OPEN_POSITIONS}</span></div>
+              <div className="text-[8px] text-white/20 uppercase font-black tracking-tighter">Active Trades</div>
+            </div>
+            <div className="w-px h-8 bg-[var(--color-crypto-border)]" />
+            <div className="text-center group relative cursor-help">
+              <div className="text-[9px] text-[var(--color-crypto-muted)] uppercase tracking-widest font-bold">Buy Power</div>
+              <div className="text-[15px] font-black font-mono text-amber-500">${availableUsdt.toFixed(4)}</div>
+              <div className="text-[8px] text-white/20 uppercase font-black tracking-tighter">Cash - $11 Reserve</div>
+            </div>
+          </div>
+
+          {/* Controls */}
+          <div className="flex items-center gap-2">
+            {/* Strategy Picker */}
+            <div className="relative" ref={dropdownRef}>
+              <button
+                onClick={() => setDropdownOpen(!dropdownOpen)}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-all text-[11px] font-mono font-bold"
+              >
+                <Cpu size={12} className="text-white/40" />
                 <span className={STRATEGY_INFO[currentStrategy].color}>{STRATEGY_INFO[currentStrategy].name}</span>
-                <ChevronDown size={10} />
+                <ChevronDown size={10} className="text-white/30" />
               </button>
               {dropdownOpen && (
-                <div className="absolute top-full left-0 mt-1 w-[200px] bg-neutral-900 border border-white/10 rounded-xl shadow-2xl z-[100] max-h-[300px] overflow-y-auto">
+                <div className="absolute right-0 top-full mt-2 w-[240px] bg-[#1a1f2e] border border-white/10 rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.6)] z-[110]">
                   {(Object.keys(STRATEGY_INFO) as BotStrategy[]).map((s) => (
-                    <button key={s} onClick={() => { setStrategy(s); setDropdownOpen(false); }} className={`w-full flex items-center justify-between px-3 py-3 text-left border-b border-white/5 last:border-0 hover:bg-white/5 transition-colors ${currentStrategy === s ? 'bg-white/5' : ''}`}>
-                      <span className={`text-[10px] font-mono font-bold ${STRATEGY_INFO[s].color}`}>{STRATEGY_INFO[s].name}</span>
-                      <span className="text-[7px] font-black px-1 rounded border border-white/20 opacity-40">{STRATEGY_INFO[s].risk}</span>
+                    <button 
+                      key={s} 
+                      onClick={() => { setStrategy(s); setDropdownOpen(false); setContextStrategy(null); }}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        setContextStrategy(prev => prev === s ? null : s);
+                      }}
+                      className={`w-full flex items-center justify-between px-4 py-2.5 text-left border-b border-white/5 last:border-0 hover:bg-white/5 transition-colors ${currentStrategy === s ? "bg-white/10" : ""}`}
+                    >
+                      <div className="flex flex-col">
+                        <span className={`text-[11px] font-mono font-black ${STRATEGY_INFO[s].color}`}>{STRATEGY_INFO[s].name}</span>
+                        <span className="text-[9px] text-white/30 font-mono">{STRATEGY_INFO[s].desc}</span>
+                      </div>
+                      <span className="text-[8px] font-black px-2 py-0.5 rounded border border-white/20 text-white/40">{STRATEGY_INFO[s].risk}</span>
                     </button>
                   ))}
+                  
+                  {/* Extended Description Context Panel */}
+                  <AP>
+                    {contextStrategy && (
+                      <m.div
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -10 }}
+                        className="absolute right-[calc(100%+12px)] top-0 w-[240px] bg-[#1a1f2e] border border-white/10 rounded-2xl p-4 shadow-2xl z-[120]"
+                      >
+                        <div className={`text-[11px] font-black uppercase tracking-widest mb-2 ${STRATEGY_INFO[contextStrategy].color}`}>
+                          {STRATEGY_INFO[contextStrategy].name} Analysis
+                        </div>
+                        <p className="text-[10px] text-white/60 font-mono leading-relaxed">
+                          {STRATEGY_INFO[contextStrategy].extendedDesc}
+                        </p>
+                        <div className="mt-3 pt-3 border-t border-white/5 flex items-center justify-between">
+                          <span className="text-[8px] text-white/20 uppercase font-black">Risk Profile</span>
+                          <span className={`text-[9px] font-black ${
+                            STRATEGY_INFO[contextStrategy].risk === 'HIGH' ? 'text-red-400' :
+                            STRATEGY_INFO[contextStrategy].risk === 'MED' ? 'text-orange-400' :
+                            'text-emerald-400'
+                          }`}>
+                            {STRATEGY_INFO[contextStrategy].risk}
+                          </span>
+                        </div>
+                      </m.div>
+                    )}
+                  </AP>
                 </div>
               )}
             </div>
+
+            {/* Bot Toggle */}
+            <button onClick={toggleAutoTrading}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-all text-[11px] font-bold font-mono ${
+                isAutoTrading
+                  ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-300 shadow-[0_0_20px_rgba(16,185,129,0.15)]"
+                  : "bg-white/5 border-white/10 text-white/40 hover:bg-white/10"
+              }`}
+            >
+              <Zap size={13} fill={isAutoTrading ? "currentColor" : "none"} />
+              <span>{isAutoTrading ? "BOT ON" : "BOT OFF"}</span>
+            </button>
+
+            {/* Live/Paper Toggle */}
+            <button onClick={toggleLiveMode}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-all text-[11px] font-bold font-mono ${
+                isLiveMode
+                  ? "bg-orange-500/10 border-orange-500/30 text-orange-600 shadow-sm"
+                  : "bg-black/5 border-black/5 text-black/40 hover:bg-black/10"
+              }`}
+            >
+              <Activity size={13} />
+              <span>{isLiveMode ? "LIVE" : "PAPER"}</span>
+            </button>
+
+            {/* Sync */}
+            {isLiveMode && (
+              <button onClick={syncBalances}
+                className="p-2 rounded-lg bg-white/5 border border-white/10 text-white/40 hover:text-white hover:bg-white/10 transition-all"
+                title="Sync balances"
+              >
+                <RefreshCw size={14} />
+              </button>
+            )}
           </div>
-          <button onClick={toggleAutoTrading} className={`p-2.5 rounded-xl transition-all ${isAutoTrading ? 'bg-[var(--color-crypto-green)] text-black' : 'bg-white/5 text-white/30'}`}>
-            <Zap size={16} fill={isAutoTrading ? "currentColor" : "none"} />
-          </button>
         </div>
+      </header>
 
-        <div className="glass-panel p-2.5 rounded-xl border border-white/5 bg-white/[0.01] flex items-center justify-between">
-          <div className="flex flex-col">
-            <div className={`text-[8px] sm:text-[9px] font-bold font-mono ${isLiveMode ? 'text-orange-400' : 'text-blue-400'}`}>
-              {isLiveMode ? 'LIVE REAL' : 'PAPER SIM'}
-            </div>
-            <div className="text-[9px] sm:text-[10px] font-mono font-bold text-white/70">Binance API</div>
-          </div>
-          <button onClick={toggleLiveMode} className={`p-2.5 rounded-xl transition-all ${isLiveMode ? 'bg-orange-500 text-white shadow-[0_0_15px_rgba(249,115,22,0.3)]' : 'bg-white/5 text-white/30'}`}>
-            <Activity size={16} />
-          </button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        <div className="lg:col-span-9 space-y-6">
-          {/* Active Coins Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-3 gap-2 sm:gap-3">
-            {activeCoins.filter(coin => marketData[coin]?.price).map((coin) => (
-              <div key={coin} className="glass-panel p-2 sm:p-3 rounded-xl border border-white/5 bg-white/[0.01]">
-                <div className="flex justify-between items-start mb-2">
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-4 h-4 rounded bg-white/5 flex items-center justify-center font-bold text-[8px]">{coin[0]}</div>
-                    <span className="text-[9px] font-bold font-mono text-white/80">{coin}</span>
-                  </div>
-                  <div className={`text-[6px] font-black px-1.5 py-0.5 rounded border ${marketData[coin]?.signal === 'BUY' ? 'border-green-500/30 text-green-400' : marketData[coin]?.signal === 'SELL' ? 'border-red-500/30 text-red-400' : 'border-white/5 text-white/5'}`}>
-                    {marketData[coin]?.signal}
-                  </div>
-                </div>
-                <div className="mb-1">
-                  <div className={`text-xs sm:text-sm font-black font-mono tracking-tighter ${getPriceColor(coin)}`}>
-                    ${marketData[coin].price?.toLocaleString(undefined, { minimumFractionDigits: getDecimals(coin) })}
-                  </div>
-                  {marketData[coin]?.gain !== null && (
-                    <div className={`text-[7px] font-mono font-bold ${marketData[coin].gain! >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                      {marketData[coin].gain! >= 0 ? '+' : ''}{marketData[coin].gain!.toFixed(1)}%
-                    </div>
-                  )}
-                </div>
-                <div className="flex items-center gap-1.5 text-[6px] opacity-20 font-mono overflow-hidden">
-                  <span>RSI {marketData[coin]?.rsiValue?.toFixed(0) || '--'}</span>
-                  <span>VOL {(marketData[coin]?.volatility! * 100).toFixed(1)}%</span>
-                </div>
-              </div>
-            ))}
-            <Link href="/markets" className="glass-panel p-3 rounded-xl border border-dashed border-white/10 flex flex-col items-center justify-center text-white/10 hover:text-white/30 transition-all min-h-[60px]">
-              <PlusCircle size={14} />
-              <span className="text-[7px] font-mono mt-1 uppercase tracking-widest text-center">Add Asset</span>
-            </Link>
-          </div>
-
-          <div className="h-[320px]">
-            <TradeMap />
-          </div>
-
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-            <HoldingsTable />
+      {/* ── MAIN CONTENT GRID ────────────────────────────────────────── */}
+      <div className="px-6 sm:px-8 lg:px-12 py-5 space-y-8">
+        
+        {/* ROW 1: Swap + Holdings Table */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          <div className="lg:col-span-4 h-[480px]">
             <TriangulationTool />
           </div>
+          <div className="lg:col-span-8 h-[480px]">
+            <HoldingsTable />
+          </div>
         </div>
 
-        <div className="lg:col-span-3 space-y-4">
-          <div className="glass-panel rounded-2xl border border-white/5 flex flex-col h-[400px] sm:h-[550px]">
-            <div className="p-4 border-b border-white/5 flex items-center justify-between shrink-0">
-              <div className="flex gap-4">
-                {["signals", "trades"].map((tab) => (
-                  <button key={tab} onClick={() => setActiveLogTab(tab as any)} className={`text-[9px] font-mono uppercase font-bold tracking-widest ${activeLogTab === tab ? 'text-white border-b-2 border-white/80 pb-1' : 'text-white/20'}`}>
-                    {tab}
-                  </button>
-                ))}
+        {/* ROW 2: DUAL TELEMETRY STREAM (Signals & Trades side-by-side) */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Signals Stream */}
+          <div className="rounded-[2rem] border border-white/[0.07] bg-[#1a1f2e]/80 backdrop-blur-xl flex flex-col shadow-2xl overflow-hidden h-[360px]">
+            <div className="px-8 py-4 border-b border-white/[0.05] flex items-center justify-between bg-white/[0.02]">
+              <div className="flex items-center gap-3">
+                <Activity size={14} className="text-indigo-400" />
+                <span className="text-[11px] font-black text-white/40 uppercase tracking-[0.3em]">Market Intelligence</span>
               </div>
-              <button onClick={downloadLogs} className="p-1.5 text-white/20 hover:text-white transition-all bg-white/5 rounded-lg">
-                <Download size={14} />
+              <button onClick={downloadLogs} className="text-[9px] font-black text-white/20 hover:text-white transition-colors uppercase tracking-widest">
+                 <Download size={12} className="inline mr-1" /> CSV
               </button>
             </div>
-            
-            <div className="flex-1 overflow-y-auto p-4 space-y-2">
-              <AP mode="popLayout">
-                {(activeLogTab === "signals" ? signalsLog : tradeHistory).map((log: any) => (
-                  <m.div key={log.id} initial={{ opacity: 0, x: -5 }} animate={{ opacity: 1, x: 0 }} className="flex justify-between items-center text-[10px] font-mono pb-2 border-b border-white/[0.03]">
-                    <div className="flex flex-col">
-                      <span className="font-bold text-white/90">{log.coin}</span>
-                      <span className="text-[7px] opacity-30">{log.time}</span>
+            <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+               <div className="flex flex-col gap-1">
+                  {signalsLog.slice(0, 50).map((log: any) => (
+                    <m.div key={log.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center justify-between px-4 py-2.5 rounded-xl bg-white/[0.01] border border-white/[0.03] hover:bg-white/[0.05] transition-all group/log">
+                      <div className="flex items-center gap-4">
+                        <span className="text-[9px] font-mono text-white/10 w-[55px]">{log.time}</span>
+                        <div className={`w-1 h-1 rounded-full ${log.signal === "BUY" ? "bg-emerald-500" : "bg-red-500"}`} />
+                        <span className="text-[12px] font-black text-white/80 uppercase tracking-tighter w-[60px]">{log.coin}</span>
+                        <span className={`text-[9px] font-black px-1.5 py-0.5 rounded border ${log.signal === "BUY" ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-red-500/10 text-red-500 border-red-500/20"}`}>{log.signal}</span>
+                        <span className="text-[10px] text-white/30 truncate max-w-[150px]">{log.reason}</span>
+                      </div>
+                    </m.div>
+                  ))}
+                  {signalsLog.length === 0 && <div className="py-20 text-center text-[10px] text-white/5 uppercase font-black">No Signal Stream Detected</div>}
+               </div>
+            </div>
+          </div>
+
+          {/* Trade Records Stream */}
+          <div className="rounded-[2rem] border border-white/[0.07] bg-[#1a1f2e]/80 backdrop-blur-xl flex flex-col shadow-2xl overflow-hidden h-[360px]">
+            <div className="px-8 py-4 border-b border-white/[0.05] flex items-center justify-between bg-white/[0.02]">
+              <div className="flex items-center gap-3">
+                <Download size={14} className="text-emerald-400" />
+                <span className="text-[11px] font-black text-white/40 uppercase tracking-[0.3em]">Execution Logs</span>
+              </div>
+              <button onClick={downloadLogs} className="text-[9px] font-black text-white/20 hover:text-white transition-colors uppercase tracking-widest">
+                 <Download size={12} className="inline mr-1" /> CSV
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+               <div className="flex flex-col gap-1">
+                  {tradeHistory.slice(0, 50).map((th: any) => (
+                    <m.div key={th.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center justify-between px-4 py-2.5 rounded-xl bg-white/[0.01] border border-white/[0.03] hover:bg-white/[0.05] transition-all group/log">
+                       <div className="flex items-center gap-4">
+                        <span className="text-[9px] font-mono text-white/10 w-[55px]">{th.time}</span>
+                        <div className="w-1 h-1 rounded-full bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.5)]" />
+                        <span className="text-[12px] font-black text-white/80 uppercase tracking-tighter w-[60px]">{th.coin}</span>
+                        <span className="text-[10px] font-bold text-white/60">Executed @ ${Number(th.price || 0).toFixed(3)}</span>
+                        <span className="text-[9px] text-white/20">V: {Number(th.amount || 0).toFixed(th.amount > 1 ? 2 : 5)}</span>
+                      </div>
+                      <span className="text-[9px] font-black text-emerald-400/40 uppercase">Success</span>
+                    </m.div>
+                  ))}
+                  {tradeHistory.length === 0 && <div className="py-20 text-center text-[10px] text-white/5 uppercase font-black">No Active Trade Records</div>}
+               </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ROW 3: Big Chart + Side Coins (Enhanced) */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          <div className="lg:col-span-7">
+            <MainCandleChart />
+          </div>
+          
+          <div className="lg:col-span-5 space-y-4">
+            <div className="text-[11px] text-white/30 uppercase tracking-[0.4em] font-bold pl-2">Market Intelligence</div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 overflow-y-auto max-h-[500px] pr-2 custom-scrollbar">
+              {activeCoins.map((coin) => {
+                const md = marketData[coin];
+                const priceUp = md?.price && md?.prevPrice && md.price > md.prevPrice;
+                
+                // Real Conviction: 0-100 based on RSI proximity to extremes
+                const rVal = md?.rsiValue || 50;
+                const conviction = Math.min(100, Math.round(Math.abs(rVal - 50) * 2.5));
+                
+                const balance = balances[coin] || 0;
+                const value = balance * (md?.price || 0);
+
+                return (
+                  <m.div key={coin}
+                    whileHover={{ x: 4, backgroundColor: "rgba(255,255,255,0.02)" }}
+                    className="relative rounded-xl border border-white/[0.05] bg-[#0d121f]/60 p-2 flex flex-col gap-1.5 transition-all shadow-lg overflow-hidden group"
+                  >
+                    {/* Compact Header: Symbol | Price | Holding */}
+                    <div className="flex items-center justify-between px-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[12px] font-black text-white/90 tracking-tighter uppercase">{coin}</span>
+                        <div className={`text-[12px] font-black font-mono tracking-tighter ${getPriceColor(coin)}`}>
+                          {md?.price ? md.price.toLocaleString('en-US', { minimumFractionDigits: getDecimals(coin) }) : '—'}
+                        </div>
+                      </div>
+                      {balance > 0 && (
+                        <div className="text-[8px] font-black text-emerald-400 bg-emerald-400/10 px-1.5 py-0.5 rounded uppercase">
+                          {balance < 1 ? balance.toFixed(3) : balance.toFixed(1)}
+                        </div>
+                      )}
                     </div>
-                    <div className="flex items-center gap-3">
-                      <span className="text-white/60">${log.price}</span>
-                      <span className={`font-black px-1 rounded ${log.signal === 'BUY' || log.action === 'BUY' ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}`}>
-                        {log.signal || log.action}
-                      </span>
+
+                    {/* Nano Stats Line: RSI | ATR | VOL */}
+                    <div className="flex items-center justify-between px-1 text-[9px] font-bold border-y border-white/[0.03] py-0.5">
+                      <div className="flex gap-2">
+                        <span className={md?.rsiValue && md.rsiValue > 70 ? 'text-red-400' : md?.rsiValue && md.rsiValue < 30 ? 'text-emerald-400' : 'text-white/20'}>
+                          R:{md?.rsiValue?.toFixed(0) || '—'}
+                        </span>
+                        <span className="text-white/20">A:{md?.atr ? md.atr.toFixed(getDecimals(coin)).slice(-4) : '—'}</span>
+                      </div>
+                      <span className="text-white/10 uppercase">V:{md?.volume ? (md.volume / 1000).toFixed(0) + 'k' : '—'}</span>
+                    </div>
+
+                    {/* Action Hub & Signal */}
+                    <div className="flex items-center justify-between gap-2">
+                      <div className={`w-2 h-2 rounded-full shadow-[0_0_8px] ${
+                        md?.signal === "BUY" ? "bg-emerald-500 shadow-emerald-500/50" :
+                        md?.signal === "SELL" ? "bg-red-500 shadow-red-500/50" :
+                        "bg-white/10 shadow-transparent"
+                      }`} title={md?.signal || "HOLD"} />
+                      
+                      <div className="flex items-center gap-1">
+                        <span className="text-[8px] font-black text-white/20 uppercase tracking-tighter">Conviction</span>
+                        <div className="h-1 w-12 bg-white/5 rounded-full overflow-hidden">
+                          <div className="h-full bg-indigo-500/50" style={{ width: `${conviction}%` }} />
+                        </div>
+                      </div>
+                      
+                      <div className="flex gap-1 flex-1 justify-end opacity-40 group-hover:opacity-100 transition-opacity">
+                         <button 
+                           onClick={() => executeTrade("BUY", coin, Math.min(availableUsdt, 25))}
+                           className="px-2 py-0.5 rounded bg-white/5 border border-white/10 text-[8px] font-black uppercase text-white/40 hover:bg-emerald-500 hover:text-black transition-all"
+                         >
+                           Buy $25
+                         </button>
+                         <button 
+                           onClick={() => executeTrade("SELL", coin, value)}
+                           disabled={balance <= 0}
+                           className="px-2 py-0.5 rounded bg-white/5 border border-white/10 text-[8px] font-black uppercase text-white/40 hover:bg-red-500 hover:text-white transition-all disabled:opacity-0"
+                         >
+                           Exit
+                         </button>
+                         <button onClick={() => removeCoin(coin)} className="ml-1 text-white/10 hover:text-red-400">
+                           <XCircle size={10} />
+                         </button>
+                      </div>
                     </div>
                   </m.div>
-                ))}
-              </AP>
-              {(activeLogTab === "signals" ? signalsLog.length : tradeHistory.length) === 0 && (
-                <div className="flex flex-col items-center justify-center h-full opacity-10 py-10">
-                  <Activity size={32} />
-                  <span className="text-[8px] font-mono mt-2">NO DATA</span>
-                </div>
-              )}
+                );
+              })}
+              
+              <Link href="/markets"
+                className="rounded-2xl border-2 border-dashed border-white/5 flex items-center justify-center gap-3 p-4 text-white/10 hover:text-white/30 hover:border-white/10 hover:bg-white/[0.01] transition-all"
+              >
+                <PlusCircle size={16} strokeWidth={1} />
+                <span className="text-[9px] font-black uppercase tracking-widest">Connect Node</span>
+              </Link>
             </div>
+
+            {/* Compact Paper Load if needed */}
+            {!isLiveMode && (
+              <div className="rounded-2xl border border-white/[0.07] bg-indigo-500/5 p-4 space-y-3">
+                <div className="text-[9px] text-white/20 uppercase font-black">Refill USDT</div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number" placeholder="Amt"
+                    className="w-full bg-black/40 border border-white/5 rounded-lg px-3 py-1.5 text-[11px] font-mono text-white focus:outline-none"
+                    value={usdtInput}
+                    onChange={(e) => setUsdtInput(e.target.value)}
+                  />
+                  <button onClick={handleUpdateBalance} className="px-3 py-1.5 bg-indigo-600 rounded-lg text-[9px] font-black text-white">REUSE</button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

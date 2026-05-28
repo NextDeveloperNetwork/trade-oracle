@@ -12,9 +12,9 @@ export type BotStrategy =
   | "MOMENTUM" | "VWAP" | "AGGRESSIVE" | "SWING"
   | "HYPER" | "SNIPER";
 
-type Candle = { o: number; h: number; l: number; c: number; v: number; t: number };
+export type Candle = { o: number; h: number; l: number; c: number; v: number; t: number };
 
-type TradeLog = { id: string; time: string; coin: string; price: string; signal: SignalType };
+type TradeLog = { id: string; time: string; coin: string; price: string; signal: SignalType; reason?: string };
 type ExecutedTrade = { id: string; time: string; coin: string; action: "BUY" | "SELL"; amount: string; price: string; totalUSDT: string };
 type Notification = { id: string; msg: string; type: "error" | "info" | "success" };
 
@@ -53,8 +53,19 @@ type LiveCoinState = {
   atr?: number;
   volatility?: number;
   rsiValue?: number;
+  isReady?: boolean;
   volume?: number;
+  avgPrice?: number;
+  profitPct?: number;
   botStatus?: string;
+  filters?: {
+    tickSize: string;
+    stepSize: string;
+    minQty: string;
+    minNotional: string;
+  };
+  history?: number[];
+  candleHistory?: Candle[];
 };
 
 type Portfolio = Record<string, number>;
@@ -68,7 +79,7 @@ type TradingContextType = {
   setStrategy: (s: BotStrategy) => void;
   balances: Portfolio;
   setUSDTBalance: (amount: number) => void;
-  executeTrade: (action: "BUY" | "SELL", coin: string, usdtAmount: number, isInternal?: boolean) => Promise<boolean>;
+  executeTrade: (action: "BUY" | "SELL", coin: string, usdtAmount: number, isInternal?: boolean, exactQty?: number) => Promise<boolean>;
   executeTriangulation: (fromAsset: string, toAsset: string, amountOfFrom: number) => Promise<boolean>;
   marketData: Record<string, LiveCoinState>;
   activeCoins: string[];
@@ -85,17 +96,29 @@ type TradingContextType = {
   setConvertFromAsset: (a: string) => void;
   snapshots: HistorySnapshot[];
   openPositions: OpenPosition[];
+  resetAll: () => void;
+  resetPnL: () => void;
+  // totalUSDT is a stable state value, not recomputed inline
 };
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const DEFAULT_COINS = ["BTC", "ETH", "XRP"];
-const SAFE_RESERVE = 10.0;    // Always keep $10 USDT reserve for operations
-const NANO_FILLER  = 10.1;    // Used for buy-and-trim on small trades
-const MIN_NOTIONAL = 10.0;    // Binance minimum sell value
-const MIN_BOT_USD  = 0.10;    // Minimum bot trade size to bother with
-const MAX_ALLOCATION = 0.20;  // Max 20% of available funds per trade
+export const SAFE_RESERVE = 11.0;    // Re-applied $11 hold for nano-trade lubrication
+export const MAX_OPEN_POSITIONS = 5;  // Increased to 5 slots per user request
+const MAX_TRADE_USD  = 25.00; // Raised to avoid fee-heavy nano-trades ($15-25 min)
+const NANO_BUFFER  = 1.0;     // Safety buffer for nano-trades ($1.00 extra)
+const MIN_NOTIONAL_CONST = 10.0; // Default fallback
+const MIN_BOT_USD  = 0.05;    // Minimum bot trade size to bother with
+const MAX_ALLOCATION = 0.30;  // Max 30% of available funds per trade
 
+const COOLDOWNS: Record<BotStrategy, number> = {
+  HYPER: 5_000, SCALPER: 10_000, AGGRESSIVE: 10_000,
+  MOMENTUM: 20_000, VWAP: 20_000, TREND: 60_000,
+  REVERSION: 60_000, BREAKOUT: 90_000, SWING: 120_000, SNIPER: 300_000,
+};
+
+const ORACLE_AUTH_TOKEN = "oracle_default_secret_9988";
 // ─── Math Helpers ────────────────────────────────────────────────────────────
 
 const avg = (a: number[]) => a.reduce((s, v) => s + v, 0) / a.length;
@@ -110,13 +133,18 @@ const ema = (prices: number[], period: number): number => {
 
 const rsi = (prices: number[], period = 14): number => {
   if (prices.length < period + 1) return 50;
-  let gains = 0, losses = 0;
-  for (let i = prices.length - period; i < prices.length; i++) {
+  let avgGain = 0, avgLoss = 0;
+  for (let i = 1; i <= period; i++) {
     const d = prices[i] - prices[i - 1];
-    if (d > 0) gains += d; else losses -= d;
+    if (d > 0) avgGain += d; else avgLoss -= d;
   }
-  if (losses === 0) return 100;
-  return 100 - 100 / (1 + gains / losses);
+  avgGain /= period; avgLoss /= period;
+  for (let i = period + 1; i < prices.length; i++) {
+    const d = prices[i] - prices[i - 1];
+    avgGain = (avgGain * (period - 1) + (d > 0 ? d : 0)) / period;
+    avgLoss = (avgLoss * (period - 1) + (d < 0 ? -d : 0)) / period;
+  }
+  return avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss);
 };
 
 const atr = (candles: Candle[], period = 14): number => {
@@ -140,10 +168,33 @@ const volumeRatio = (vols: number[], period = 20): number => {
   return avgV > 0 ? vols[vols.length - 1] / avgV : 1;
 };
 
+// Round value to nearest step/tick size
+const roundStep = (val: number, step: string) => {
+  const s = parseFloat(step);
+  if (!s || s === 0) return val;
+  const precision = Math.max(0, -Math.log10(s));
+  // Use a small epsilon to avoid floor issues with floating point (e.g. 0.00000001)
+  return parseFloat((Math.floor(val / s + 0.00000001) * s).toFixed(10));
+};
+
+const formatToPrecision = (val: number, step: string) => {
+  const s = parseFloat(step);
+  const precision = Math.max(0, Math.round(-Math.log10(s)));
+  return val.toFixed(precision);
+};
+
+const getWeightedEntry = (positions: OpenPosition[]) => {
+  if (positions.length === 0) return 0;
+  const totalAmount = positions.reduce((sum, p) => sum + p.amount, 0);
+  if (totalAmount === 0) return 0;
+  const weightedSum = positions.reduce((sum, p) => sum + (p.entryPrice * p.amount), 0);
+  return weightedSum / totalAmount;
+};
+
 // ─── Pro Strategies (All candle-aware) ───────────────────────────────────────
 
 function computeSignal(strategy: BotStrategy, candles: Candle[]): SignalType {
-  if (candles.length < 15) return "HOLD";
+  if (candles.length < 10) return "HOLD";
   const closes = candles.map(c => c.c);
   const vols   = candles.map(c => c.v);
   const price  = closes[closes.length - 1];
@@ -152,13 +203,17 @@ function computeSignal(strategy: BotStrategy, candles: Candle[]): SignalType {
 
   switch (strategy) {
     case "SCALPER": {
-      // EMA 5/30 cross + volume surge + min volatility filter
-      if (candles.length < 30) return "HOLD";
-      if (vola < 0.0003) return "HOLD";   // Dead-zone filter
+      // High-Frequency Sensitivity: EMA cross + RSI
+      if (candles.length < 10) return "HOLD";
       const s = ema(closes.slice(-5), 5);
-      const l = ema(closes.slice(-30), 30);
-      if (s > l * 1.00005 && vr > 1.05) return "BUY";
-      if (s < l * 0.99995 && vr > 1.05) return "SELL";
+      const l = ema(closes.slice(-15), 15);
+      const r = rsi(closes.slice(-10));
+      
+      const buySignal  = s > l && r < 60;
+      const sellSignal = s < l && r > 40;
+      
+      if (buySignal) return "BUY";
+      if (sellSignal) return "SELL";
       return "HOLD";
     }
     case "TREND": {
@@ -202,12 +257,16 @@ function computeSignal(strategy: BotStrategy, candles: Candle[]): SignalType {
       return "HOLD";
     }
     case "VWAP": {
-      // Approximated VWAP with ATR bands
+      // True VWAP: volume-weighted price
       if (candles.length < 50) return "HOLD";
-      const vwapApprox = avg(closes.slice(-50));
-      const atrVal = atr(candles.slice(-50), 14);
-      if (price < vwapApprox - atrVal * 0.5) return "BUY";
-      if (price > vwapApprox + atrVal * 0.5) return "SELL";
+      const window = candles.slice(-50);
+      const totalVol = window.reduce((s, c) => s + c.v, 0);
+      const vwap = totalVol > 0
+        ? window.reduce((s, c) => s + ((c.h + c.l + c.c) / 3) * c.v, 0) / totalVol
+        : avg(window.map(c => c.c));
+      const atrVal = atr(candles, 14);
+      if (price < vwap - atrVal * 0.6) return "BUY";
+      if (price > vwap + atrVal * 0.6) return "SELL";
       return "HOLD";
     }
     case "AGGRESSIVE": {
@@ -237,8 +296,9 @@ function computeSignal(strategy: BotStrategy, candles: Candle[]): SignalType {
       const s2 = avg(closes.slice(-2));
       const l8 = avg(closes.slice(-8));
       const r  = rsi(closes.slice(-14));
-      if (s2 > l8 * 1.00005 && r < 65 && vr > 1.0) return "BUY";
-      if (s2 < l8 * 0.99995 && r > 35 && vr > 1.0) return "SELL";
+      // Tighter RSI and higher volume requirement to skip noise
+      if (s2 > l8 * 1.0001 && r < 30 && vr > 1.1) return "BUY";
+      if (s2 < l8 * 0.9999 && r > 70 && vr > 1.1) return "SELL";
       return "HOLD";
     }
     case "SNIPER": {
@@ -264,12 +324,40 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
   const [convertFromAsset, setConvertFromAsset] = useState("USDT");
   const [isLiveMode, setIsLiveMode]       = useState(false);
   const [isAutoTrading, setIsAutoTrading] = useState(false);
-  const [currentStrategy, setStrategy]   = useState<BotStrategy>("SCALPER");
+  const [currentStrategy, setStrategy]     = useState<BotStrategy>("SCALPER");
 
+  const [paperInitial, setPaperInitial] = useState(10_000);
   const [paperBalances, setPaperBalances] = useState<Portfolio>({ USDT: 10000, BTC: 0, ETH: 0, XRP: 0 });
   const [liveBalances, setLiveBalances]   = useState<Portfolio>({ USDT: 0 });
 
   const balances = isLiveMode ? liveBalances : paperBalances;
+
+  // Guard: prevent save-effects from firing before the hydration load completes
+  const hasHydrated = useRef(false);
+
+  // Combined mount effect for all persistent state
+  useEffect(() => {
+    const savedCoins = localStorage.getItem("activeCoins");
+    if (savedCoins) try { setActiveCoins(JSON.parse(savedCoins)); } catch {}
+    
+    const savedOpen = localStorage.getItem("openPositions");
+    if (savedOpen) try { setOpenPositions(JSON.parse(savedOpen)); } catch {}
+
+    const savedSnaps = localStorage.getItem("snapshots");
+    if (savedSnaps) try { setSnapshots(JSON.parse(savedSnaps)); } catch {}
+
+    const savedPaperBal = localStorage.getItem("paperBalances");
+    if (savedPaperBal) try { setPaperBalances(JSON.parse(savedPaperBal)); } catch {}
+
+    const savedPaperInit = localStorage.getItem("paperInitial");
+    if (savedPaperInit) try { setPaperInitial(parseFloat(savedPaperInit)); } catch {}
+
+    const savedLiveInit = localStorage.getItem("liveInitial");
+    if (savedLiveInit) try { setLiveInitial(parseFloat(savedLiveInit)); } catch {}
+
+    // Mark hydration complete — save effects may now fire
+    hasHydrated.current = true;
+  }, []);
 
   // Synchronous balance ref — always up to date even across async gaps
   const balancesRef = useRef<Portfolio>(balances);
@@ -302,13 +390,74 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
 
   const [snapshots, setSnapshots] = useState<HistorySnapshot[]>([]);
 
-  // Stable refs for use inside intervals/closures
+  // ─── Ghost Position Scrubber (Rescue Logic) ────────────────────────────────
+  // High-performance rescue logic that uses an in-memory registry for entry price recovery.
+  const entryRegistryRef = useRef<Record<string, number>>({});
+  
+  useEffect(() => {
+    const saved = localStorage.getItem("entry_registry");
+    if (saved) entryRegistryRef.current = JSON.parse(saved);
+  }, []);
+
+  useEffect(() => {
+    if (!hasHydrated.current) return;
+    setOpenPositions(prev => {
+      let changed = false;
+      const currentCoinsWithBalance = Object.keys(balances).filter(c => c !== "USDT" && balances[c] > 0);
+      const repaired = [...prev];
+
+      currentCoinsWithBalance.forEach(coin => {
+        if (!repaired.some(p => p.coin === coin)) {
+          const savedPrice = entryRegistryRef.current[coin];
+          const fallbackPrice = marketDataRef.current[coin]?.price || 0;
+          const finalPrice = savedPrice || fallbackPrice;
+
+          if (finalPrice > 0) {
+            repaired.push({
+              coin,
+              entryTime: "Restored",
+              entryPrice: finalPrice,
+              amount: balances[coin],
+              invested: balances[coin] * finalPrice,
+              strategy: strategyRef.current
+            });
+            changed = true;
+          }
+        }
+      });
+      return changed ? repaired : prev;
+    });
+  }, [balances]); 
+
+  // Watcher: Ensure any coin with a balance is always in activeCoins (subscribes to live price stream)
+  useEffect(() => {
+    if (!hasHydrated.current) return;
+    const coinsWithBalance = Object.keys(balances).filter(c => c !== "USDT" && balances[c] > 0.00001);
+    let changed = false;
+    const nextActive = [...activeCoins];
+    
+    coinsWithBalance.forEach(coin => {
+      if (!nextActive.includes(coin)) {
+        nextActive.push(coin);
+        changed = true;
+      }
+    });
+
+    if (changed) {
+      setActiveCoins(nextActive);
+      localStorage.setItem("activeCoins", JSON.stringify(nextActive));
+    }
+  }, [balances, activeCoins]);
+
+
+  // ─── Refs ──────────────────────────────────────────────────────────────────
   const strategyRef        = useRef(currentStrategy);
   const autoTradeRef       = useRef(isAutoTrading);
   const marketDataRef      = useRef(marketData);
   const historiesRef       = useRef<Record<string, Candle[]>>({});
   const lastTradeTime      = useRef<Record<string, number>>({});
   const lastSigState       = useRef<Record<string, SignalType>>({});
+  const prevVolRef         = useRef<Record<string, number>>({});
   // Async accumulator — WebSocket writes here; a separate timer flushes to React state
   const pendingUpdatesRef  = useRef<Record<string, Partial<LiveCoinState>>>({});
 
@@ -319,29 +468,89 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
   // ─── Coin management ───────────────────────────────────────────────────────
 
   useEffect(() => {
-    const saved = localStorage.getItem("activeCoins");
-    if (saved) try { setActiveCoins(JSON.parse(saved)); } catch {}
+    if (!hasHydrated.current) return;
+    if (!isLiveMode) {
+      localStorage.setItem("paperBalances", JSON.stringify(paperBalances));
+      localStorage.setItem("paperInitial", paperInitial.toString());
+    }
+  }, [paperBalances, paperInitial, isLiveMode]);
 
-    const savedSnaps = localStorage.getItem("portfolioSnapshots");
-    if (savedSnaps) try { setSnapshots(JSON.parse(savedSnaps)); } catch {}
+  useEffect(() => {
+    if (!hasHydrated.current) return;
+    localStorage.setItem("activeCoins", JSON.stringify(activeCoins));
+  }, [activeCoins]);
 
-    const savedOpen = localStorage.getItem("openPositions");
-    if (savedOpen) try { setOpenPositions(JSON.parse(savedOpen)); } catch {}
-  }, []);
-  useEffect(() => { localStorage.setItem("activeCoins", JSON.stringify(activeCoins)); }, [activeCoins]);
-  useEffect(() => { localStorage.setItem("portfolioSnapshots", JSON.stringify(snapshots)); }, [snapshots]);
-  useEffect(() => { localStorage.setItem("openPositions", JSON.stringify(openPositions)); }, [openPositions]);
+  useEffect(() => {
+    if (!hasHydrated.current) return;
+    localStorage.setItem("openPositions", JSON.stringify(openPositions));
+  }, [openPositions]);
 
   const addCoin = (symbol: string) => {
     const upper = symbol.toUpperCase();
-    if (!activeCoins.includes(upper)) {
-      setActiveCoins(prev => [...prev, upper]);
-      setMarketData(prev => ({ ...prev, [upper]: { price: null, prevPrice: null, gain: null, signal: "HOLD" } }));
-    }
+    setActiveCoins(prev => {
+      if (!prev.includes(upper)) {
+        const next = [...prev, upper];
+        localStorage.setItem("activeCoins", JSON.stringify(next));
+        return next;
+      }
+      return prev;
+    });
+    setMarketData(prev => {
+      if (!prev[upper]) {
+        return { ...prev, [upper]: { price: null, prevPrice: null, gain: null, signal: "HOLD" } };
+      }
+      return prev;
+    });
   };
-  const removeCoin = (symbol: string) => setActiveCoins(prev => prev.filter(c => c !== symbol.toUpperCase()));
 
-  // ─── Notifications ────────────────────────────────────────────────────────
+  const removeCoin = (symbol: string) => {
+    const upper = symbol.toUpperCase();
+    setActiveCoins(prev => {
+      const next = prev.filter(c => c !== upper);
+      localStorage.setItem("activeCoins", JSON.stringify(next));
+      return next;
+    });
+    // Emergency Wipe: also remove any ghost position records for this coin
+    setOpenPositions(prev => prev.filter(p => p.coin !== upper));
+  };
+
+  const resetAll = () => {
+    if (!confirm("Are you sure you want to RESET EVERYTHING? All history, positions, and balances will be wiped.")) return;
+    
+    // 1. Flush WebSocket & refs (implicit via state resets)
+    
+    // 2. Clear State
+    setPaperBalances({ USDT: 10000 });
+    setLiveBalances({ USDT: 0 });
+    setPaperInitial(10000);
+    setOpenPositions([]);
+    setTradeHistory([]);
+    setCompletedTrades([]);
+    setSnapshots([]);
+    setActiveCoins(DEFAULT_COINS);
+    setSignalsLog([]);
+    setMarketData({});
+    
+    // 3. Purge registries
+    entryRegistryRef.current = {};
+
+    // 4. Clear LocalStorage
+    localStorage.clear();
+    
+    notify("Engine fully reset. All circuits cleared.", "success");
+  };
+
+  const resetPnL = () => {
+    const { total } = calculateTotalUSDT();
+    if (isLiveMode) {
+      setLiveInitial(total);
+      localStorage.setItem("liveInitial", total.toString());
+    } else {
+      setPaperInitial(total);
+      localStorage.setItem("paperInitial", total.toString());
+    }
+    notify("Total P&L has been zeroed to current equity.", "success");
+  };
 
   const notify = useCallback((msg: string, type: Notification["type"] = "info") => {
     const id = Math.random().toString(36).slice(2, 9);
@@ -349,19 +558,17 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
     setTimeout(() => setNotifications(prev => prev.filter(n => n.id !== id)), 5000);
   }, []);
 
-  // ─── Mode toggles ─────────────────────────────────────────────────────────
-
   const toggleLiveMode = () => setIsLiveMode(prev => {
-    if (!prev) setIsAutoTrading(false); // safety: always disable bot when switching to live
+    if (!prev) setIsAutoTrading(false);
     return !prev;
   });
   const toggleAutoTrading = () => setIsAutoTrading(p => !p);
 
-  // ─── Binance Sync ─────────────────────────────────────────────────────────
-
   const syncBalances = useCallback(async () => {
     try {
-      const res = await fetch("/api/binance");
+      const res = await fetch("/api/binance", {
+        headers: { "x-oracle-token": ORACLE_AUTH_TOKEN }
+      });
       const data = await res.json();
       if (data.error || data.msg) {
         notify(`Live Sync: ${data.error || data.msg}`, "error");
@@ -369,17 +576,25 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
       }
       if (data.balances) {
         const nb: Portfolio = { USDT: 0 };
-        const newActive = [...activeCoins];
-        data.balances.forEach((b: any) => {
-          const total = parseFloat(b.free) + parseFloat(b.locked);
-          if (total > 0.0001) {
-            nb[b.asset] = total;
-            if (b.asset !== "USDT" && !newActive.includes(b.asset)) {
-              newActive.push(b.asset);
+        setActiveCoins(prev => {
+          const newActive = [...prev];
+          let changed = false;
+          data.balances.forEach((b: any) => {
+            const total = parseFloat(b.free) + parseFloat(b.locked);
+            if (total > 0.0001) {
+              nb[b.asset] = total;
+              if (b.asset !== "USDT" && !newActive.includes(b.asset)) {
+                newActive.push(b.asset);
+                changed = true;
+              }
             }
+          });
+          if (changed) {
+            localStorage.setItem("activeCoins", JSON.stringify(newActive));
+            return newActive;
           }
+          return prev;
         });
-        if (newActive.length !== activeCoins.length) setActiveCoins(newActive);
         setLiveBalances(prev => { balancesRef.current = nb; return nb; });
         notify("Live Binance data synchronized", "success");
       }
@@ -387,35 +602,51 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
       console.error("Sync failed", e);
       notify("Sync failed. Check network or keys.", "error");
     }
-  }, []);
+  }, [notify]);
 
-  // ─── Trade Execution ──────────────────────────────────────────────────────
-
-  const recordTrade = (action: "BUY" | "SELL", coin: string, amount: number, price: number, total: number) => {
+  const recordTrade = useCallback((action: "BUY" | "SELL", coin: string, amount: number, price: number, total: number) => {
     const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
     const id   = "t-" + Math.random().toString(36).slice(2, 10);
     const dec  = coin === "BTC" || coin === "ETH" ? 6 : 4;
-    setTradeHistory(prev => [{ id, time, coin, action, amount: amount.toFixed(dec), price: price.toFixed(2), totalUSDT: total.toFixed(2) }, ...prev].slice(0, 100));
 
-    // ── Position Tracking for P&L ──
+    const loggedTotal = total;
+    setTradeHistory(prev => [{ id, time, coin, action, amount: amount.toFixed(dec), price: price.toFixed(2), totalUSDT: loggedTotal.toFixed(2) }, ...prev].slice(0, 100));
+
     if (action === "BUY") {
+      const registry = { ...entryRegistryRef.current, [coin]: price };
+      entryRegistryRef.current = registry;
+      localStorage.setItem("entry_registry", JSON.stringify(registry));
+
       setOpenPositions(prev => [...prev, {
         coin, entryTime: time, entryPrice: price,
-        amount, invested: total, strategy: strategyRef.current,
+        amount, invested: loggedTotal, strategy: strategyRef.current,
       }]);
     } else if (action === "SELL") {
-      // Match against oldest open position for this coin (FIFO)
       const idx = openPositionsRef.current.findIndex(p => p.coin === coin);
       if (idx !== -1) {
-        setOpenPositions(prev => {
-          const next = [...prev];
-          next.splice(idx, 1);
-          return next;
-        });
         const pos = openPositionsRef.current[idx];
-        const returned = total;
-        const profit   = returned - pos.invested;
-        const profitPct = pos.invested > 0 ? (profit / pos.invested) * 100 : 0;
+        const sellPct = Math.min(1, amount / pos.amount);
+        const isFullSell = sellPct >= 0.99;
+
+        if (isFullSell) {
+          setOpenPositions(prev => prev.filter((_, i) => i !== idx));
+          const registry = { ...entryRegistryRef.current };
+          delete registry[coin];
+          entryRegistryRef.current = registry;
+          localStorage.setItem("entry_registry", JSON.stringify(registry));
+        } else {
+          setOpenPositions(prev => prev.map((p, i) => i === idx ? {
+            ...p,
+            amount: p.amount - amount,
+            invested: p.invested * (1 - sellPct)
+          } : p));
+        }
+        
+        const realReturned = amount * price; 
+        const portionInvested = pos.invested * sellPct;
+        const profit = realReturned - portionInvested;
+        const profitPct = portionInvested > 0 ? (profit / portionInvested) * 100 : 0;
+        
         const completed: CompletedTrade = {
           id: "ct-" + Math.random().toString(36).slice(2, 10),
           coin,
@@ -423,9 +654,9 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
           exitTime: time,
           entryPrice: pos.entryPrice,
           exitPrice: price,
-          amount: pos.amount,
-          invested: pos.invested,
-          returned,
+          amount: amount,
+          invested: portionInvested,
+          returned: realReturned,
           profit,
           profitPct,
           strategy: pos.strategy,
@@ -433,87 +664,113 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
         setCompletedTrades(prev => [completed, ...prev].slice(0, 500));
       }
     }
-  };
+  }, [strategyRef]);
 
   const executeTrade = useCallback(async (
     action: "BUY" | "SELL",
     coin: string,
     usdtAmount: number,
-    isInternal = false
+    isInternal = false,
+    exactQty?: number
   ): Promise<boolean> => {
     const livePrice = marketDataRef.current[coin]?.price;
     if (!livePrice || usdtAmount <= 0) return false;
 
-    // ══════════════════════════════════════════════════════════════════════════
-    // NANO-TRADE ENGINE (Binance $10 minimum workaround)
-    //
-    // BUY  $2 of COIN:  Buy $12 worth → immediately sell $10 back → net: +$2 of COIN
-    // SELL $2 of COIN:  Buy $10 more  → immediately sell $12      → net: -$2 of COIN
-    // ══════════════════════════════════════════════════════════════════════════
+    const filters = marketDataRef.current[coin]?.filters;
+    const dynamicMinNotional = filters ? parseFloat(filters.minNotional) : MIN_NOTIONAL_CONST;
+    const effectiveMinNotional = dynamicMinNotional + 0.01;
 
-    if (!isInternal && usdtAmount < MIN_NOTIONAL) {
-
+    if (!isInternal && usdtAmount < effectiveMinNotional) {
       if (action === "BUY") {
-        // Need to buy $12 total, then sell $10 back to USDT
-        const totalBuy = usdtAmount + MIN_NOTIONAL; // e.g. $2 + $10 = $12
-        const available = (balancesRef.current.USDT || 0) - SAFE_RESERVE;
-        if (totalBuy > available) {
-          notify(`Nano-BUY blocked: Need $${totalBuy.toFixed(2)}, only $${available.toFixed(2)} above reserve.`, "error");
+        const totalBuy = usdtAmount + effectiveMinNotional + NANO_BUFFER; 
+        const totalFunds = balancesRef.current.USDT || 0;
+        if (totalBuy > totalFunds) {
+          notify(`Nano-BUY blocked: Need $${totalBuy.toFixed(2)}, only $${totalFunds.toFixed(2)} available.`, "error");
           return false;
         }
+        if (totalFunds - usdtAmount < SAFE_RESERVE) {
+          notify(`Reserve Protection: $1.00 trade would drop total below $${SAFE_RESERVE}.`, "error");
+          return false;
+        }
+        
         const step1 = await executeTrade("BUY", coin, totalBuy, true);
         if (!step1) return false;
-        await new Promise(r => setTimeout(r, 300));
-        // Step 2: Sell $10 worth back to USDT (this meets the $10 minimum)
-        const step2 = await executeTrade("SELL", coin, MIN_NOTIONAL, true);
-        if (!step2) notify("Nano-BUY trim step failed, you hold extra coin.", "info");
+        
+        await new Promise(r => setTimeout(r, 400));
+        
+        const trimAmount = effectiveMinNotional + NANO_BUFFER;
+        const step2 = await executeTrade("SELL", coin, trimAmount, true);
+        if (!step2) notify("Nano-BUY trim failed: holding extra asset.", "info");
         return true;
       }
 
       if (action === "SELL") {
-        // Need to buy $10 more of this coin, then sell $12 total
-        const buyFirst = MIN_NOTIONAL; // Buy $10 more of coin
-        const totalSell = usdtAmount + MIN_NOTIONAL; // Then sell $12 worth
-        const available = (balancesRef.current.USDT || 0) - SAFE_RESERVE;
-        if (buyFirst > available) {
-          notify(`Nano-SELL blocked: Need $${buyFirst.toFixed(2)} USDT to inflate, only $${available.toFixed(2)} above reserve.`, "error");
+        const inflationAmount = effectiveMinNotional + NANO_BUFFER;
+        const totalSell = usdtAmount + inflationAmount;
+        const totalFunds = balancesRef.current.USDT || 0;
+        if (inflationAmount > totalFunds) {
+          notify(`Nano-SELL blocked: Need $${inflationAmount.toFixed(2)} to inflate, only $${totalFunds.toFixed(2)} available.`, "error");
           return false;
         }
-        const step1 = await executeTrade("BUY", coin, buyFirst, true);
+
+        const step1 = await executeTrade("BUY", coin, inflationAmount, true);
         if (!step1) return false;
-        await new Promise(r => setTimeout(r, 300));
-        // Step 2: Sell $12 worth (this meets the $10 minimum)
+        
+        await new Promise(r => setTimeout(r, 400));
+        
         const step2 = await executeTrade("SELL", coin, totalSell, true);
-        if (!step2) notify("Nano-SELL dump step failed, you hold extra coin.", "info");
+        if (!step2) notify("Nano-SELL dump failed: check holdings.", "info");
         return true;
       }
     }
 
-    // ── Reserve guard (BUY) ──
     if (action === "BUY" && !isInternal) {
       const afterTrade = (balancesRef.current.USDT || 0) - usdtAmount;
       if (afterTrade < SAFE_RESERVE) {
-        notify("Reserve Protection: trade would dip below $10 reserve.", "error");
+        notify(`Reserve Protection: trade would leave less than $${SAFE_RESERVE} USDT.`, "error");
         return false;
       }
+      addCoin(coin);
     }
 
-    const coinAmount = usdtAmount / livePrice;
+    const coinAmount = exactQty || usdtAmount / livePrice;
 
-    // ── Live Binance execution ──
     if (isLiveMode) {
       try {
+        const filters = marketDataRef.current[coin]?.filters;
+        const tickSize = filters?.tickSize || "0.01";
+        const stepSize = filters?.stepSize || "0.00001";
+        const minNotional = parseFloat(filters?.minNotional || "10.0");
+
+        if (usdtAmount < minNotional && !isInternal) {
+          notify(`Trade too small: $${usdtAmount.toFixed(2)} < $${minNotional}`, "error");
+          return false;
+        }
+
+        const roundedQty = roundStep(coinAmount, stepSize);
+        const formattedQty = formatToPrecision(roundedQty, stepSize);
+        const formattedUsdt = usdtAmount.toFixed(2);
+
         const res = await fetch("/api/binance", {
           method: "POST",
-          body: JSON.stringify({ symbol: coin, side: action, quantity: coinAmount.toFixed(6), usdtAmount: usdtAmount.toFixed(2) })
+          headers: { 
+            "Content-Type": "application/json",
+            "x-oracle-token": ORACLE_AUTH_TOKEN 
+          },
+          body: JSON.stringify({ 
+            symbol: coin, 
+            side: action, 
+            quantity: formattedQty, 
+            usdtAmount: formattedUsdt 
+          })
         });
         const result = await res.json();
         if (result.orderId) {
           await syncBalances();
-          recordTrade(action, coin, coinAmount, livePrice, usdtAmount);
+          recordTrade(action, coin, parseFloat(formattedQty), livePrice, usdtAmount);
           return true;
         }
-        if (result.msg || result.error) notify(`Binance: ${result.msg || result.error}`, "error");
+        if (result.msg || result.error) notify(`Binance Error: ${result.msg || result.error} (Qty: ${formattedQty})`, "error");
         return false;
       } catch (e: any) {
         notify(`API error: ${e.message}`, "error");
@@ -521,75 +778,98 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    // ── Simulator execution ──
+    const PAPER_FEE = 0.001; // 0.1% simulation fee
     if (action === "BUY") {
       if ((balancesRef.current.USDT || 0) < usdtAmount) return false;
-      setBalances(prev => ({ ...prev, USDT: (prev.USDT || 0) - usdtAmount, [coin]: (prev[coin] || 0) + coinAmount }));
+      const fee = usdtAmount * PAPER_FEE;
+      setBalances(prev => ({ 
+        ...prev, 
+        USDT: (prev.USDT || 0) - usdtAmount - fee, 
+        [coin]: (prev[coin] || 0) + coinAmount 
+      }));
     } else {
       if ((balancesRef.current[coin] || 0) < coinAmount) return false;
-      setBalances(prev => ({ ...prev, [coin]: Math.max(0, (prev[coin] || 0) - coinAmount), USDT: (prev.USDT || 0) + usdtAmount }));
+      const fee = usdtAmount * PAPER_FEE;
+      setBalances(prev => ({ 
+        ...prev, 
+        [coin]: Math.max(0, (prev[coin] || 0) - coinAmount), 
+        USDT: (prev.USDT || 0) + usdtAmount - fee 
+      }));
     }
     recordTrade(action, coin, coinAmount, livePrice, usdtAmount);
     return true;
   }, [isLiveMode, notify, syncBalances, setBalances]);
 
-  // ─── High-Frequency Tick WebSockets ────────────────────────────────────────
-  // KEY DESIGN: WebSocket handlers NEVER call setMarketData directly.
-  // They write raw values into pendingUpdatesRef (a plain object, no re-renders).
-  // A separate 500ms flush timer commits everything to React state in one batch.
-
-  const coinsKey = activeCoins.join(','); // stable string dep prevents reference churn
+  const coinsKey = activeCoins.join(',');
 
   useEffect(() => {
     if (activeCoins.length === 0) return;
 
-    const sockets = activeCoins.map(coin => {
-      const ws = new WebSocket(`wss://stream.binance.com:9443/ws/${coin.toLowerCase()}usdt@trade`);
+    let ws: WebSocket;
+    let reconnectTimer: any;
+    let flushId: any;
 
-      ws.onmessage = (event) => {
-        const payload = JSON.parse(event.data);
-        if (!payload.p) return;
+    const connect = () => {
+      const streams = activeCoins.map(c => `${c.toLowerCase()}usdt@ticker`).join("/");
+      const wsUrl = `wss://stream.binance.com:9443/stream?streams=${streams}`;
+      ws = new WebSocket(wsUrl);
 
-        const price = parseFloat(payload.p);
-        const vol   = parseFloat(payload.q);
-        const time  = payload.T;
-        const bucketTime = Math.floor(time / 1000) * 1000;
+      ws.onerror = () => notify(`Price stream error. System re-syncing…`, "error");
+      ws.onclose = () => {
+        console.log("WebSocket disconnected. Reconnecting in 3s...");
+        reconnectTimer = setTimeout(connect, 3000);
+      };
+
+      ws.onmessage = (e) => {
+        const msg = JSON.parse(e.data);
+        const data = msg.data || msg;
+        if (!data.s) return;
+      
+        const symbol = data.s;
+        const coin = symbol.replace("USDT", "");
+        const price = parseFloat(data.c);
+        const last24hVol = parseFloat(data.v);
+        const prev24hVol = prevVolRef.current[coin] || last24hVol;
+        const intervalVol = Math.max(0, last24hVol - prev24hVol);
+        prevVolRef.current[coin] = last24hVol;
+        const now   = Date.now();
+        const bucketTime = Math.floor(now / 1000) * 1000;
 
         const hist = historiesRef.current[coin] || [];
         let lastCandle = hist.length > 0 ? hist[hist.length - 1] : null;
 
         if (!lastCandle || lastCandle.t !== bucketTime) {
-          const newCandle: Candle = { o: price, h: price, l: price, c: price, v: vol, t: bucketTime };
+          const newCandle: Candle = { o: price, h: price, l: price, c: price, v: intervalVol, t: bucketTime };
           hist.push(newCandle);
           lastCandle = newCandle;
         } else {
           lastCandle.c = price;
           lastCandle.h = Math.max(lastCandle.h, price);
           lastCandle.l = Math.min(lastCandle.l, price);
-          lastCandle.v += vol;
+          lastCandle.v += intervalVol; 
         }
         historiesRef.current[coin] = hist.slice(-300);
 
         const closes = hist.map(c => c.c);
-        // Write into accumulator ref — zero React renders triggered here
         pendingUpdatesRef.current[coin] = {
           prevPrice:  marketDataRef.current[coin]?.price ?? null,
           price,
           signal:     marketDataRef.current[coin]?.signal ?? "HOLD",
           gain:       marketDataRef.current[coin]?.gain   ?? null,
-          volume:     lastCandle!.v,
+          volume:     intervalVol,
           volatility: volatility(closes, 20),
           atr:        atr(hist, 14),
           rsiValue:   rsi(closes.slice(-20)),
+          isReady:    hist.length >= 15,
+          history:    closes.slice(-30),
+          candleHistory: hist.slice(-60)
         };
       };
+    };
 
-      ws.onerror = () => console.warn(`[WS] Disconnected from ${coin} (likely delisted or paused)`);
-      return ws;
-    });
+    connect();
 
-    // Flush accumulated updates to React state at most twice per second
-    const flushId = setInterval(() => {
+    flushId = setInterval(() => {
       const pending = pendingUpdatesRef.current;
       if (Object.keys(pending).length === 0) return;
       pendingUpdatesRef.current = {};
@@ -598,62 +878,122 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
         for (const [c, update] of Object.entries(pending)) {
           next[c] = { ...(prev[c] || { price: null, prevPrice: null, gain: null, signal: "HOLD" }), ...update };
         }
-        marketDataRef.current = next; // keep ref in sync
+        marketDataRef.current = next;
         return next;
       });
     }, 500);
 
     return () => {
-      sockets.forEach(ws => ws.close());
+      if (ws) ws.close();
+      if (reconnectTimer) clearTimeout(reconnectTimer);
       clearInterval(flushId);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [coinsKey]);
-
-  // ─── Signal Processor (1-second heartbeat) ───────────────────────────────
 
   useEffect(() => {
     const tick = () => {
+      let currentAndPlanned = openPositionsRef.current.length;
+
       activeCoins.forEach(coin => {
         const hist = historiesRef.current[coin];
         if (!hist || hist.length < 15) return;
 
+        const price = hist[hist.length - 1].c;
         const newSig = computeSignal(strategyRef.current, hist);
-        const now    = Date.now();
-        const signal_changed = lastSigState.current[coin] !== newSig;
+        const balance = balancesRef.current[coin] || 0;
+        const hasCoin = balance * price > 0.5;
+        const now = Date.now();
+        
+        if (hist.length < 10) {
+           setMarketData(prev => ({ ...prev, [coin]: { ...prev[coin], botStatus: `Booting ${hist.length}/10` } }));
+           return;
+        }
+        
+        let displaySig = newSig;
+        if (newSig === "SELL" && !hasCoin) displaySig = "HOLD"; 
+        if (newSig === "BUY" && hasCoin) displaySig = "HOLD";   
 
-        // ── Update live indicator ──
+        const signal_changed = lastSigState.current[coin] !== displaySig;
+
         if (signal_changed) {
-          lastSigState.current[coin] = newSig;
-          setMarketData(prev => ({ ...prev, [coin]: { ...prev[coin], signal: newSig } }));
+          lastSigState.current[coin] = displaySig;
+          
+          const myPos = openPositionsRef.current.filter(p => p.coin === coin);
+          const avgEntry = getWeightedEntry(myPos);
+          const pnl = avgEntry > 0 ? ((price - avgEntry) / avgEntry) * 100 : 0;
 
-          if (newSig !== "HOLD") {
+          setMarketData(prev => ({ 
+            ...prev, 
+            [coin]: { ...prev[coin], signal: displaySig, avgPrice: avgEntry, profitPct: pnl } 
+          }));
+
+          if (displaySig !== "HOLD") {
             setSignalsLog(prev => [{
               id:     "s-" + Math.random().toString(36).slice(2, 8),
               time:   new Date().toLocaleTimeString(),
               coin,
-              price:  hist[hist.length - 1].c.toFixed(coin === "CELR" || coin === "DUSK" ? 4 : 2),
-              signal: newSig,
+              price:  price.toFixed(coin === "CELR" || coin === "DUSK" ? 4 : 2),
+              signal: displaySig as SignalType,
+              reason: `EMA/RSI Pattern Detected (${strategyRef.current})`
             }, ...prev].slice(0, 100));
+          } else if (newSig !== "HOLD" && signal_changed) {
+             // Patterns detected but filtered by position guard
+             setSignalsLog(prev => [{
+                id:     "s-" + Math.random().toString(36).slice(2, 8),
+                time:   new Date().toLocaleTimeString(),
+                coin,
+                price:  price.toFixed(2),
+                signal: "HOLD" as SignalType,
+                reason: `Signal ${newSig} Suppressed: Pos Exists`
+             }, ...prev].slice(0, 100));
           }
         }
 
-        // ── Auto-Trade logic ──
-        if (!autoTradeRef.current || newSig === "HOLD") return;
+        if (!autoTradeRef.current) return;
 
+        const dynCooldown = COOLDOWNS[strategyRef.current] || 15_000;
         const lastTr  = lastTradeTime.current[coin] || 0;
-        if (now - lastTr < 15_000) return; // 15s cooldown per coin
+        if (now - lastTr < dynCooldown) {
+          const remaining = Math.ceil((dynCooldown - (now - lastTr)) / 1000);
+          setMarketData(prev => ({ ...prev, [coin]: { ...prev[coin], botStatus: `CD ${remaining}s` } }));
+          return; 
+        }
 
-        const price  = hist[hist.length - 1].c;
-        const hasCoin = (balancesRef.current[coin] || 0) * price > 1.0;
         const needsBuy  = newSig === "BUY"  && !hasCoin;
         const needsSell = newSig === "SELL" && hasCoin;
 
-        if (!needsBuy && !needsSell) return;
+        let forceSell = false;
+        if (hasCoin) {
+          const myPos = openPositionsRef.current.filter(p => p.coin === coin);
+          const avgEntry = getWeightedEntry(myPos);
+          const profit = avgEntry > 0 ? (price - avgEntry) / avgEntry : 0;
+
+          const isTakeProfit = profit > 0.008;
+          const isStopLoss   = profit < -0.015;
+
+          if (isTakeProfit || isStopLoss) forceSell = true;
+        }
+
+        if (!needsBuy && !needsSell && !forceSell) {
+          // Show why the bot is idle for this coin
+          if (newSig === "BUY" && hasCoin) {
+            setMarketData(prev => ({ ...prev, [coin]: { ...prev[coin], botStatus: "Already In" } }));
+          } else if (newSig === "SELL" && !hasCoin) {
+            setMarketData(prev => ({ ...prev, [coin]: { ...prev[coin], botStatus: "No Position" } }));
+          } else {
+            setMarketData(prev => ({ ...prev, [coin]: { ...prev[coin], botStatus: "Waiting…" } }));
+          }
+          return;
+        }
 
         lastTradeTime.current[coin] = now;
 
         if (needsBuy) {
+          if (currentAndPlanned >= MAX_OPEN_POSITIONS) {
+            setMarketData(prev => ({ ...prev, [coin]: { ...prev[coin], botStatus: `Full ${currentAndPlanned}/${MAX_OPEN_POSITIONS}` } }));
+            return;
+          }
+          currentAndPlanned++; // Reserve slot immediately to prevent race in this tick loop
           const bal  = balancesRef.current.USDT || 0;
           const aggr = ["HYPER", "AGGRESSIVE", "SNIPER"].includes(strategyRef.current);
           const baseConf = aggr ? 0.10 : 0.05;
@@ -662,25 +1002,37 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
           const l = avg(closes.slice(-20));
           const conf = Math.min(MAX_ALLOCATION, Math.max(baseConf, (Math.abs(s - l) / l) * 80));
           let amt = (bal - SAFE_RESERVE) * conf;
+          amt = Math.min(amt, MAX_TRADE_USD);
 
-          // Smart-scale: can't exceed available budget above reserve + filler
-          const maxSpend = Math.max(0, bal - SAFE_RESERVE - (amt < MIN_NOTIONAL ? NANO_FILLER : 0));
-          if (amt > maxSpend) amt = maxSpend;
-          if (amt < MIN_BOT_USD) {
-            setMarketData(prev => ({ ...prev, [coin]: { ...prev[coin], botStatus: "Low Funds" } }));
+          const filters = marketDataRef.current[coin]?.filters;
+          const dynamicMinNotional = filters ? parseFloat(filters.minNotional) : MIN_NOTIONAL_CONST;
+          const neededForNano = dynamicMinNotional + NANO_BUFFER + amt;
+
+          if (bal < neededForNano) {
+            setMarketData(prev => ({ ...prev, [coin]: { ...prev[coin], botStatus: `Low $${bal.toFixed(0)}` } }));
             return;
           }
 
-          setMarketData(prev => ({ ...prev, [coin]: { ...prev[coin], botStatus: "Buying…" } }));
+          const projectedFinalUSDT = bal - amt;
+          if (projectedFinalUSDT < SAFE_RESERVE) {
+            setMarketData(prev => ({ ...prev, [coin]: { ...prev[coin], botStatus: "At Reserve" } }));
+            return;
+          }
+
+          setMarketData(prev => ({ ...prev, [coin]: { ...prev[coin], botStatus: `Buying $${amt.toFixed(0)}…` } }));
           executeTrade("BUY", coin, amt).then(ok => {
             setMarketData(prev => ({ ...prev, [coin]: { ...prev[coin], botStatus: ok ? "✓ Bought" : "✗ Failed" } }));
           });
-        } else if (needsSell) {
+        } else if (needsSell || forceSell) {
           const coinBal = balancesRef.current[coin] || 0;
           const sellVal = coinBal * price;
-          if (sellVal < MIN_BOT_USD) return;
+          if (sellVal < MIN_BOT_USD) {
+            setMarketData(prev => ({ ...prev, [coin]: { ...prev[coin], botStatus: "Too Small" } }));
+            return;
+          }
 
-          setMarketData(prev => ({ ...prev, [coin]: { ...prev[coin], botStatus: "Selling…" } }));
+          const label = forceSell ? "Force Sell…" : "Selling…";
+          setMarketData(prev => ({ ...prev, [coin]: { ...prev[coin], botStatus: label } }));
           executeTrade("SELL", coin, sellVal).then(ok => {
             setMarketData(prev => ({ ...prev, [coin]: { ...prev[coin], botStatus: ok ? "✓ Sold" : "✗ Failed" } }));
           });
@@ -688,60 +1040,103 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
       });
     };
 
-    const id = setInterval(tick, 1000);
+    const id = setInterval(tick, 1500);
     return () => clearInterval(id);
   }, [activeCoins, executeTrade]);
 
-  // ─── 24h Gain Sync ───────────────────────────────────────────────────────
-
   useEffect(() => {
-    const fetchGains = async () => {
+    const fetchMarketInfo = async () => {
       try {
-        const res  = await fetch("/api/binance?type=exchangeInfo");
+        const res  = await fetch("/api/binance?type=exchangeInfo", {
+          headers: { "x-oracle-token": ORACLE_AUTH_TOKEN }
+        });
         const data = await res.json();
         if (!Array.isArray(data)) return;
-        const map: Record<string, number> = {};
-        data.forEach((d: any) => { map[d.baseAsset] = parseFloat(d.gain); });
+        
         setMarketData(prev => {
           const next = { ...prev };
-          Object.keys(next).forEach(c => { if (map[c] !== undefined) next[c] = { ...next[c], gain: map[c] }; });
+          data.forEach((d: any) => {
+            const coin = d.baseAsset;
+            if (next[coin]) {
+              next[coin] = { 
+                ...next[coin], 
+                gain: parseFloat(d.gain),
+                filters: d.filters
+              };
+            } else if (activeCoins.includes(coin)) {
+              next[coin] = {
+                price: null,
+                prevPrice: null,
+                gain: parseFloat(d.gain),
+                signal: "HOLD",
+                filters: d.filters
+              };
+            }
+          });
+          marketDataRef.current = next;
           return next;
         });
-      } catch {}
+      } catch (e) {
+        console.error("Failed to fetch market info:", e);
+      }
     };
-    fetchGains();
-    const id = setInterval(fetchGains, 60_000);
+    fetchMarketInfo();
+    const id = setInterval(fetchMarketInfo, 60_000);
     return () => clearInterval(id);
-  }, []);
+  }, [activeCoins]);
 
   // ─── P&L ─────────────────────────────────────────────────────────────────
 
-  const [paperInitial, setPaperInitial] = useState(10_000);
   const [liveInitial,  setLiveInitial]  = useState<number | null>(null);
   const [totalProfit,  setTotalProfit]  = useState(0);
+  const [totalUSDT,    setTotalUSDT]    = useState(0);
 
   const calculateTotalUSDT = useCallback(() => {
     let total = balances.USDT || 0;
-    activeCoins.forEach(c => {
+    let hasStalePrice = false;
+
+    Object.keys(balances).forEach(c => {
+      if (c === "USDT") return;
+      const amount = balances[c] || 0;
+      if (amount <= 0.00000001) return;
+      
       const p = marketData[c]?.price;
-      if (p && balances[c]) total += balances[c] * p;
+      if (p && p > 0) {
+        total += amount * p;
+      } else {
+        // We have a balance but no price -> this will cause a false P&L drop
+        hasStalePrice = true;
+      }
     });
-    return total;
-  }, [balances, activeCoins, marketData]);
+
+    return { total, isStale: hasStalePrice };
+  }, [balances, marketData]);
 
   useEffect(() => {
-    const total = calculateTotalUSDT();
+    const { total, isStale } = calculateTotalUSDT();
+    if (isStale && totalUSDT > 0) return; // Prevent flickering to lower values during sync
+    
+    setTotalUSDT(total);
     if (isLiveMode) {
-      if (liveInitial === null && total > 0) { setLiveInitial(total); }
+      if (liveInitial === null && total > 0 && !isStale) { 
+        setLiveInitial(total);
+        localStorage.setItem("liveInitial", total.toString());
+      }
       else if (liveInitial !== null) setTotalProfit(total - liveInitial);
     } else {
       setTotalProfit(total - paperInitial);
     }
-  }, [balances, marketData, isLiveMode, liveInitial, paperInitial, calculateTotalUSDT]);
+  }, [balances, marketData, isLiveMode, liveInitial, paperInitial, calculateTotalUSDT, totalUSDT]);
 
   useEffect(() => { if (isLiveMode) syncBalances(); }, [isLiveMode, syncBalances]);
 
-  useEffect(() => { localStorage.setItem("snapshots", JSON.stringify(snapshots)); }, [snapshots]);
+  useEffect(() => {
+    if (!hasHydrated.current) return;
+    const timer = setTimeout(() => {
+      localStorage.setItem("snapshots", JSON.stringify(snapshots));
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [snapshots]);
 
   const setUSDTBalance = (amount: number) => {
     // Avoid double-firing side effects in setBalances updater (React StrictMode)
@@ -757,12 +1152,12 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const takeSnapshot = () => {
-      const currentVal = calculateTotalUSDT();
-      if (currentVal <= 0) return;
+      const { total, isStale } = calculateTotalUSDT();
+      if (total <= 0 || isStale) return;
       
       setSnapshots(prev => {
         const now = Date.now();
-        const newSnapshot = { t: now, v: currentVal };
+        const newSnapshot = { t: now, v: total };
         const updated = [...prev, newSnapshot];
         
         // Pruning logic: keep all from last 24h, then 1 per hour for 1mo, 1 per day for 1y
@@ -839,12 +1234,14 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
       executeTrade, executeTriangulation,
       marketData, activeCoins, addCoin, removeCoin,
       signalsLog, tradeHistory, completedTrades, notifications,
-      totalUSDT: calculateTotalUSDT(),
+      totalUSDT,
       totalProfit,
       syncBalances,
       convertFromAsset, setConvertFromAsset,
       snapshots,
       openPositions,
+      resetAll,
+      resetPnL,
     }}>
       {children}
     </TradingContext.Provider>
