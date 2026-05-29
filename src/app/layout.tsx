@@ -27,6 +27,8 @@ export const viewport = {
   viewportFit: "cover",
 };
 
+import { Toaster } from "sonner";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -34,13 +36,14 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-      <body>
+      <body className="bg-[#0a0c10]">
         <TradingProvider>
           <Header />
-          <div className="pt-16">
+          <div className="pt-20">
             {children}
           </div>
         </TradingProvider>
+        <Toaster theme="dark" position="bottom-right" closeButton richColors />
       </body>
     </html>
   );

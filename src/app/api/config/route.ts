@@ -1,0 +1,54 @@
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+
+export async function GET() {
+  try {
+    const config = await prisma.userConfig.findUnique({
+      where: { id: "oracle_config" }
+    });
+    return NextResponse.json(config || {
+      feeRecovery: 0.2,
+      netTarget: 0.5,
+      stopLoss: -1.5,
+      allocationPct: 10,
+      maxOpenPositions: 5,
+      activeCoins: ["BTC", "ETH", "XRP"]
+    });
+  } catch (error) {
+    return NextResponse.json({ error: "Failed to fetch config" }, { status: 500 });
+  }
+}
+
+export async function POST(req: Request) {
+  try {
+    const body = await req.json();
+    
+    // Retrieve existing to keep activeCoins if not provided
+    const existing = await prisma.userConfig.findUnique({ where: { id: "oracle_config" } });
+    
+    const config = await prisma.userConfig.upsert({
+      where: { id: "oracle_config" },
+      update: {
+        feeRecovery: body.feeRecovery !== undefined ? parseFloat(body.feeRecovery) : existing?.feeRecovery,
+        netTarget: body.netTarget !== undefined ? parseFloat(body.netTarget) : existing?.netTarget,
+        stopLoss: body.stopLoss !== undefined ? parseFloat(body.stopLoss) : existing?.stopLoss,
+        allocationPct: body.allocationPct !== undefined ? parseFloat(body.allocationPct) : existing?.allocationPct,
+        maxOpenPositions: body.maxOpenPositions !== undefined ? parseInt(body.maxOpenPositions) : existing?.maxOpenPositions,
+        activeCoins: body.activeCoins || existing?.activeCoins || ["BTC", "ETH", "XRP"],
+      },
+      create: {
+        id: "oracle_config",
+        feeRecovery: body.feeRecovery !== undefined ? parseFloat(body.feeRecovery) : 0.2,
+        netTarget: body.netTarget !== undefined ? parseFloat(body.netTarget) : 0.5,
+        stopLoss: body.stopLoss !== undefined ? parseFloat(body.stopLoss) : -1.5,
+        allocationPct: body.allocationPct !== undefined ? parseFloat(body.allocationPct) : 10,
+        maxOpenPositions: body.maxOpenPositions !== undefined ? parseInt(body.maxOpenPositions) : 5,
+        activeCoins: body.activeCoins || ["BTC", "ETH", "XRP"],
+      }
+    });
+    return NextResponse.json(config);
+  } catch (error) {
+    console.error("Config save error:", error);
+    return NextResponse.json({ error: "Failed to update config" }, { status: 500 });
+  }
+}

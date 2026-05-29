@@ -18,7 +18,7 @@ export default function TradeMap() {
 
   return (
     <div className="rounded-3xl border border-white/[0.1] bg-[#0f172a]/80 backdrop-blur-3xl h-full relative overflow-hidden flex flex-col group">
-      <style jsx global>{`
+      <style dangerouslySetInnerHTML={{ __html: `
         @keyframes radar-sweep {
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }
@@ -26,7 +26,7 @@ export default function TradeMap() {
         .animate-radar {
           animation: radar-sweep 8s linear infinite;
         }
-      `}</style>
+      ` }} />
       {/* Background Radar Rings */}
       <div className="absolute inset-0 flex items-center justify-center opacity-[0.03] pointer-events-none">
         <div className="w-[100px] h-[100px] border border-white rounded-full" />

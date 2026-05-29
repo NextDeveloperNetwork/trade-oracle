@@ -1,22 +1,23 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { AnimatePresence } from "framer-motion";
+import { motion as m, AnimatePresence } from "framer-motion";
 import { useTradingEngine, Candle } from "@/context/TradingContext";
 import { Activity, ChevronDown, TrendingUp, TrendingDown, Zap, Target, BarChart2 } from "lucide-react";
 
 // ─── Binance Pro Palette ─────────────────────────────────────────────────────
 const COL = {
-  GREEN: "#02c076",
-  RED: "#f84960",
-  MA7: "#f5c842",
-  MA25: "#a855f7",
-  MA99: "#3b82f6",
-  BG: "#0b0e11",
-  HUD: "#161a1e",
+  GREEN: "#00ff9d",
+  RED: "#ff3e60",
+  MA7: "#ffd900",
+  MA25: "#00d4ff",
+  MA99: "#9d00ff",
+  BG: "#07080d",
+  HUD: "#0d111b",
   ACCENT: "#f0b90b",
-  GRID: "rgba(255,255,255,0.025)",
+  GRID: "rgba(255,255,255,0.03)",
   CROSSHAIR: "rgba(255,255,255,0.15)",
+  TEXT: "rgba(255,255,255,0.6)",
 };
 
 const getDecimals = (coin: string) => {
@@ -25,29 +26,83 @@ const getDecimals = (coin: string) => {
   return 6;
 };
 
-const formatPrice = (p: number, coin: string) =>
-  p.toLocaleString("en-US", {
+const formatPrice = (p: number | undefined, coin: string) => {
+  if (p === undefined || p === null) return "--";
+  return p.toLocaleString("en-US", {
     minimumFractionDigits: getDecimals(coin),
     maximumFractionDigits: getDecimals(coin),
   });
+};
 
 // ─── Component ───────────────────────────────────────────────────────────────
 export default function MainCandleChart() {
-  const { marketData, activeCoins, tradeHistory, openPositions, currentStrategy } = useTradingEngine();
-  const [selectedCoin, setSelectedCoin] = useState<string>("");
+  const { marketData, activeCoins, tradeHistory, openPositions, currentStrategy, selectedCoin, setSelectedCoin } = useTradingEngine();
   const [isMounted, setIsMounted] = useState(false);
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  const [showCoinDrop, setShowCoinDrop] = useState(false);
+  const [chartInterval, setChartInterval] = useState<string>("1s");
+  const [histData, setHistData] = useState<Candle[]>([]);
+  const [isLoadingHist, setIsLoadingHist] = useState(false);
   const chartRef = useRef<HTMLDivElement>(null);
+  const dropRef  = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setIsMounted(true);
-    if (activeCoins.length > 0 && !selectedCoin) setSelectedCoin(activeCoins[0]);
-  }, [activeCoins, selectedCoin]);
+    
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropRef.current && !dropRef.current.contains(e.target as Node)) {
+        setShowCoinDrop(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    if (chartInterval === "1s") {
+      setHistData([]);
+      return;
+    }
+
+    const fetchHistory = async () => {
+      setIsLoadingHist(true);
+      try {
+        const symbol = selectedCoin.endsWith("USDT") ? selectedCoin : `${selectedCoin}USDT`;
+        const res = await fetch(`/api/binance?type=klines&symbol=${symbol}&interval=${chartInterval}&limit=100`, {
+          headers: { "x-oracle-token": "oracle_default_secret_9988" }
+        });
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          const mapped: Candle[] = data.map(k => ({
+            t: k[0],
+            o: parseFloat(k[1]),
+            h: parseFloat(k[2]),
+            l: parseFloat(k[3]),
+            c: parseFloat(k[4]),
+            v: parseFloat(k[5])
+          }));
+          setHistData(mapped);
+        }
+      } catch (e) {
+        console.error("Failed to fetch history", e);
+      } finally {
+        setIsLoadingHist(false);
+      }
+    };
+
+    fetchHistory();
+    const id = setInterval(fetchHistory, 60000); // refresh every minute
+    return () => clearInterval(id);
+  }, [selectedCoin, chartInterval]);
 
   const md = marketData[selectedCoin];
-  const history = useMemo(() => md?.candleHistory || [], [md?.candleHistory]);
-  const relevant = history.slice(-60);
+  const history = useMemo(() => {
+    if (chartInterval === "1s") return md?.candleHistory || [];
+    return histData;
+  }, [chartInterval, md?.candleHistory, histData]);
+
+  const relevant = useMemo(() => history.slice(-100), [history]);
 
   // ─── Technical Indicators ──────────────────────────────────────────────────
   const calcMA = (data: Candle[], period: number) =>
@@ -59,6 +114,18 @@ export default function MainCandleChart() {
 
   const ma7 = useMemo(() => calcMA(relevant, 7), [relevant]);
   const ma25 = useMemo(() => calcMA(relevant, 25), [relevant]);
+  const ma99 = useMemo(() => calcMA(relevant, 99), [relevant]);
+
+  const bb = useMemo(() => {
+    const period = 20;
+    return relevant.map((_, i) => {
+      if (i < period - 1) return null;
+      const slice = relevant.map(c => c.c).slice(Math.max(0, i - period + 1), i + 1);
+      const m = slice.reduce((s, v) => s + v, 0) / period;
+      const s = Math.sqrt(slice.reduce((acc, v) => acc + (v - m) ** 2, 0) / period);
+      return { m, u: m + 2 * s, l: m - 2 * s };
+    });
+  }, [relevant]);
 
   // RSI for the info panel
   const closes = useMemo(() => relevant.map((c) => c.c), [relevant]);
@@ -82,16 +149,31 @@ export default function MainCandleChart() {
   // ─── Loading States ────────────────────────────────────────────────────────
   if (!isMounted) return <div className="h-full bg-[#0b0e11] animate-pulse rounded-2xl border border-white/5" />;
 
-  if (relevant.length === 0) {
+  if (selectedCoin === "USDT") {
     return (
       <div className="h-full flex flex-col items-center justify-center gap-4 bg-[#0b0e11] rounded-2xl border border-white/5">
-        <Activity size={32} className="text-white/10 animate-pulse" />
+        <BarChart2 size={32} className="text-white/10" />
         <span className="text-[10px] font-mono font-black text-white/20 uppercase tracking-[0.2em]">
-          Connecting to Binance Stream…
+          Stablecoin Base - Select an Asset to View Chart
         </span>
       </div>
     );
   }
+
+  if (relevant.length === 0 || isLoadingHist) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center gap-4 bg-[#0b0e11] rounded-2xl border border-white/5">
+        <Activity size={32} className="text-white/10 animate-pulse" />
+        <span className="text-[10px] font-mono font-black text-white/20 uppercase tracking-[0.2em]">
+          {isLoadingHist ? `Loading ${chartInterval} History…` : "Connecting to Binance Stream…"}
+        </span>
+      </div>
+    );
+  }
+
+  // ─── Position & Trade Data ────────────────────────────────────────────────
+  const myPos = openPositions.find((p) => p.coin === selectedCoin);
+  const myTrades = tradeHistory.filter((t) => t.coin === selectedCoin);
 
   // ─── Chart Geometry ────────────────────────────────────────────────────────
   const width = chartRef.current?.clientWidth || 800;
@@ -99,25 +181,42 @@ export default function MainCandleChart() {
   const PAD = { top: 10, bottom: 70, right: 65, left: 0 };
   const chartH = height - PAD.top - PAD.bottom;
   const chartW = width - PAD.right - PAD.left;
-  const candleW = Math.max(4, chartW / relevant.length);
-  const volZoneH = 60; // pixel height for volume bars
 
-  const min = Math.min(...relevant.map((c) => c.l));
-  const max = Math.max(...relevant.map((c) => c.h));
-  const range = (max - min) || 0.0001;
-  const maxVol = Math.max(...relevant.map((c) => c.v)) || 1;
+  const validCandles = relevant.filter(c => 
+    typeof c.o === 'number' && !isNaN(c.o) &&
+    typeof c.c === 'number' && !isNaN(c.c) &&
+    typeof c.h === 'number' && !isNaN(c.h) &&
+    typeof c.l === 'number' && !isNaN(c.l) &&
+    typeof c.v === 'number' && !isNaN(c.v)
+  );
+
+  const displayCandles = validCandles;
+  const candleCount = displayCandles.length;
+  const candleW = Math.max(4, chartW / Math.max(1, candleCount));
+  const volZoneH = 60; 
+
+  let min = candleCount > 0 ? Math.min(...displayCandles.map((c) => c.l)) : 0;
+  let max = candleCount > 0 ? Math.max(...displayCandles.map((c) => c.h)) : 100;
+
+  // Include entry price in chart range if a position is open
+  if (myPos && myPos.entryPrice > 0) {
+    min = Math.min(min, myPos.entryPrice * 0.995); // Add 0.5% padding
+    max = Math.max(max, myPos.entryPrice * 1.005);
+  }
+
+  const range = (max - min) || 1;
+  const maxVol = candleCount > 0 ? Math.max(...displayCandles.map((c) => c.v)) : 1;
 
   const getX = (i: number) => PAD.left + i * candleW;
-  const getY = (price: number) => PAD.top + ((max - price) / range) * chartH;
+  const getY = (p: number) => {
+    const y = PAD.top + ((max - p) / range) * chartH;
+    return isNaN(y) ? 0 : y;
+  };
 
-  const lastCandle = relevant[relevant.length - 1];
-  const hoverData = hoverIdx !== null && hoverIdx < relevant.length ? relevant[hoverIdx] : null;
+  const lastCandle = displayCandles[candleCount - 1] || { o: 0, c: 0, h: 0, l: 0, v: 0, t: Date.now() };
+  const hoverData = hoverIdx !== null && hoverIdx < candleCount ? displayCandles[hoverIdx] : null;
   const displayData = hoverData || lastCandle;
   const isDisplayUp = displayData.c >= displayData.o;
-
-  // ─── Position & Trade Data ────────────────────────────────────────────────
-  const myPos = openPositions.find((p) => p.coin === selectedCoin);
-  const myTrades = tradeHistory.filter((t) => t.coin === selectedCoin);
 
   // Change % from first to last candle
   const sessionChange = relevant.length > 1
@@ -143,108 +242,113 @@ export default function MainCandleChart() {
       .join(" ");
 
   return (
-    <div className="h-full rounded-2xl border border-white/[0.06] bg-[#0b0e11] overflow-hidden flex flex-col shadow-2xl relative">
-      {/* ═══ HEADER BAR ═══════════════════════════════════════════════════════ */}
-      <div className="px-5 py-3 border-b border-white/[0.04] flex items-center justify-between bg-[#161a1e]/90 backdrop-blur-xl z-50 shrink-0">
-        {/* Left: Ticker + Price */}
-        <div className="flex items-center gap-5">
-          <div className="flex items-center gap-2 cursor-pointer">
-            <span className="text-[16px] font-black text-white tracking-tight">{selectedCoin}/USDT</span>
-            <ChevronDown size={12} className="text-white/20" />
-          </div>
-
-          <div className="flex items-center gap-3">
-            <span className={`text-[15px] font-black font-mono ${isDisplayUp ? "text-[#02c076]" : "text-[#f84960]"}`}>
-              {formatPrice(displayData.c, selectedCoin)}
-            </span>
-            <span className={`text-[11px] font-black font-mono px-2 py-0.5 rounded-md border ${
-              sessionChange >= 0
-                ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                : "bg-red-500/10 text-red-400 border-red-500/20"
-            }`}>
-              {sessionChange >= 0 ? "+" : ""}{sessionChange.toFixed(2)}%
-            </span>
-          </div>
-
-          {/* OHLC */}
-          <div className="hidden lg:flex items-center gap-4 border-l border-white/5 pl-5">
-            {[
-              { l: "O", v: displayData.o },
-              { l: "H", v: displayData.h, col: "#02c076" },
-              { l: "L", v: displayData.l, col: "#f84960" },
-              { l: "C", v: displayData.c },
-            ].map((d) => (
-              <div key={d.l} className="flex items-center gap-1">
-                <span className="text-[9px] font-black text-white/15">{d.l}</span>
-                <span className="text-[11px] font-mono font-bold" style={{ color: d.col || "rgba(255,255,255,0.5)" }}>
-                  {formatPrice(d.v, selectedCoin)}
-                </span>
+    <div className="glass-panel h-full rounded-[2.5rem] overflow-hidden flex flex-col shadow-2xl relative border border-white/[0.05]">
+        {/* ═══ HEADER BAR ═══════════════════════════════════════════════════════ */}
+        <div className="px-6 py-3 border-b border-white/[0.04] flex items-center justify-between bg-black/40 backdrop-blur-3xl z-50 shrink-0">
+          <div className="flex items-center gap-6">
+            <div className="relative" ref={dropRef}>
+              <div 
+                className="flex items-center gap-3 cursor-pointer group hover:bg-white/5 py-1 px-3 rounded-xl transition-all"
+                onClick={() => setShowCoinDrop(!showCoinDrop)}
+              >
+                <div className="w-8 h-8 rounded-full bg-indigo-500/20 flex items-center justify-center border border-indigo-500/30">
+                   <Target size={14} className="text-indigo-400" />
+                </div>
+                <div className="flex flex-col">
+                   <span className="text-[14px] font-black text-white tracking-tight leadng-none">{selectedCoin}/USDT</span>
+                   <span className="text-[9px] font-mono font-bold text-white/30 uppercase tracking-widest">{chartInterval} TERM</span>
+                </div>
+                <ChevronDown size={14} className={`text-white/20 transition-transform ${showCoinDrop ? 'rotate-180' : ''}`} />
               </div>
-            ))}
-            <div className="flex items-center gap-1 border-l border-white/5 pl-4">
-              <span className="text-[9px] font-black text-white/15">VOL</span>
-              <span className="text-[11px] font-mono font-bold text-white/40">
-                {displayData.v > 1000 ? (displayData.v / 1000).toFixed(1) + "K" : displayData.v.toFixed(1)}
-              </span>
+
+              <AnimatePresence>
+                {showCoinDrop && (
+                  <m.div 
+                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                    className="absolute top-full left-0 mt-3 w-72 bg-[#0b0e14] border border-white/10 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] p-2 z-[100] backdrop-blur-3xl"
+                  >
+                    <div className="p-3 mb-2 border-b border-white/5 flex items-center justify-between">
+                       <span className="text-[10px] font-black text-white/40 uppercase tracking-tighter">Switch Asset Bridge</span>
+                       <span className="text-[9px] font-mono text-white/20">{activeCoins.length} ACTIVE</span>
+                    </div>
+                    <div className="max-h-[350px] overflow-y-auto custom-scrollbar flex flex-col gap-1">
+                      {activeCoins.map(coin => (
+                        <button
+                          key={coin}
+                          onClick={() => { setSelectedCoin(coin); setShowCoinDrop(false); }}
+                          className={`flex items-center justify-between px-4 py-3 rounded-xl transition-all group ${
+                            selectedCoin === coin ? "bg-indigo-500/20 text-indigo-400" : "text-white/40 hover:bg-white/5 hover:text-white"
+                          }`}
+                        >
+                          <div className="flex flex-col items-start">
+                            <span className="text-[12px] font-black uppercase">{coin}</span>
+                            <span className="text-[8px] font-mono opacity-40">ORACLE_READY</span>
+                          </div>
+                          <span className="text-[10px] font-mono font-bold">${marketData[coin]?.price?.toLocaleString() || '—'}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </m.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            <div className="h-10 w-[1px] bg-white/5" />
+
+            <div className="flex items-center gap-4">
+              <div className="flex flex-col">
+                <span className={`text-[18px] font-black font-mono leading-none ${isDisplayUp ? "text-[#00ff9d]" : "text-[#ff3e60]"}`}>
+                  {formatPrice(displayData.c, selectedCoin)}
+                </span>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className={`text-[10px] font-black font-mono ${sessionChange >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                    {sessionChange >= 0 ? "+" : ""}{sessionChange.toFixed(2)}%
+                  </span>
+                  <span className="text-[9px] font-mono text-white/10 uppercase tracking-tighter">Session Delta</span>
+                </div>
+              </div>
             </div>
           </div>
-          <div className="flex items-center gap-4 border-l border-white/5 pl-8">
-            <div className="flex flex-col">
-              <span className="text-[9px] font-black text-red-500/40 uppercase tracking-tighter">Neural Projection</span>
-              <span className="text-[12px] font-mono font-bold text-red-500">
-                ${(() => {
-                  const lookback = 10;
-                  const slice = relevant.slice(-lookback);
-                  if (slice.length < lookback) return "---";
-                  const avgY = slice.reduce((acc, c) => acc + c.c, 0) / lookback;
-                  const avgX = lookback / 2;
-                  let num = 0, den = 0;
-                  slice.forEach((c, i) => {
-                    num += (i - avgX) * (c.c - avgY);
-                    den += (i - avgX) * (i - avgX);
-                  });
-                  const m = den === 0 ? 0 : num / den;
-                  return formatPrice(lastCandle.c + (m * 5), selectedCoin);
-                })()}
-              </span>
+
+          <div className="flex items-center gap-5">
+            {/* Timeframes */}
+            <div className="flex items-center bg-white/[0.03] p-1 rounded-xl border border-white/[0.05] overflow-x-auto no-scrollbar max-w-[280px]">
+              {["1s", "5m", "15m", "1h", "4h", "1d", "1w", "1M", "1Y"].map(tf => (
+                <button
+                  key={tf}
+                  onClick={() => setChartInterval(tf === "1Y" ? "1M" : tf)}
+                  className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all flex-shrink-0 ${
+                    chartInterval === (tf === "1Y" ? "1M" : tf) 
+                      ? "bg-white text-black shadow-xl" 
+                      : "text-white/20 hover:text-white/50"
+                  }`}
+                >
+                  {tf}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-3">
+              {currentRSI !== null && (
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/[0.03] border border-white/[0.05] text-[10px] font-black font-mono">
+                  <Zap size={10} className={currentRSI > 70 ? "text-red-400" : currentRSI < 30 ? "text-emerald-400" : "text-white/30"} />
+                  <span className="text-white/40">RSI</span>
+                  <span className={currentRSI > 70 ? "text-red-400" : currentRSI < 30 ? "text-emerald-400" : "text-white"}>{currentRSI.toFixed(1)}</span>
+                </div>
+              )}
+              {md?.signal && md.signal !== "HOLD" && (
+                <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl font-black text-[10px] uppercase animate-pulse border ${
+                  md.signal === "BUY" ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-red-500/10 text-red-500 border-red-500/20"
+                }`}>
+                  <Activity size={10} />
+                  {md.signal} TARGET
+                </div>
+              )}
             </div>
           </div>
         </div>
-
-        {/* Right: Info Panel */}
-        <div className="flex items-center gap-3">
-          {/* RSI Badge */}
-          {currentRSI !== null && (
-            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[10px] font-black font-mono ${
-              currentRSI > 70
-                ? "bg-red-500/10 text-red-400 border-red-500/20"
-                : currentRSI < 30
-                  ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                  : "bg-white/5 text-white/40 border-white/10"
-            }`}>
-              <Zap size={10} />
-              RSI {currentRSI.toFixed(0)}
-            </div>
-          )}
-
-          {/* Signal Status */}
-          {md?.signal && md.signal !== "HOLD" && (
-            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[10px] font-black uppercase ${
-              md.signal === "BUY"
-                ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                : "bg-red-500/10 text-red-400 border-red-500/20"
-            }`}>
-              <Target size={10} />
-              {md.signal} Signal
-            </div>
-          )}
-
-          {/* Strategy */}
-          <div className="px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[9px] font-black font-mono uppercase">
-            {currentStrategy}
-          </div>
-        </div>
-      </div>
 
       {/* ═══ CHART CANVAS ═════════════════════════════════════════════════════ */}
       <div
@@ -299,10 +403,11 @@ export default function MainCandleChart() {
           ))}
 
           {/* ── Volume Bars ───────────────────────────────────────────── */}
-          {relevant.map((c, i) => {
+          {displayCandles.map((c, i) => {
             const x = getX(i);
             const isUp = c.c >= c.o;
-            const volH = Math.max(1, (c.v / maxVol) * volZoneH);
+            const volH = maxVol > 0 ? Math.max(1, (c.v / maxVol) * volZoneH) : 0;
+            if (isNaN(volH)) return null;
             return (
               <rect
                 key={`vol-${i}`}
@@ -314,50 +419,51 @@ export default function MainCandleChart() {
             );
           })}
 
-          {/* ── MA Lines ──────────────────────────────────────────────── */}
+          {/* ── EMA Ribbon ────────────────────────────────────────────── */}
           <polyline
-            fill="none" stroke={COL.MA7} strokeWidth="1.5" strokeLinejoin="round" opacity={0.7}
+            fill="none" stroke={COL.MA7} strokeWidth="1.2" strokeLinejoin="round" opacity={0.6}
             points={maPath(ma7)}
           />
           <polyline
-            fill="none" stroke={COL.MA25} strokeWidth="1.5" strokeLinejoin="round" opacity={0.5}
+            fill="none" stroke={COL.MA25} strokeWidth="1.2" strokeLinejoin="round" opacity={0.4}
             points={maPath(ma25)}
           />
+          <polyline
+            fill="none" stroke={COL.MA99} strokeWidth="1.2" strokeLinejoin="round" opacity={0.3}
+            points={maPath(ma99)}
+          />
 
-          {/* ── Candlesticks ──────────────────────────────────────────── */}
-          {relevant.map((c, i) => {
+          {/* ── Candlesticks (Cyber Theme) ────────────────────────────── */}
+          {displayCandles.map((c, i) => {
             const x = getX(i);
             const isUp = c.c >= c.o;
             const color = isUp ? COL.GREEN : COL.RED;
             const yO = getY(c.o);
             const yC = getY(c.c);
             const bodyY = Math.min(yO, yC);
-            const bodyH = Math.max(1, Math.abs(yO - yC));
+            const bodyH = Math.max(1.5, Math.abs(yO - yC));
             const isHovered = hoverIdx === i;
 
             return (
               <g key={`candle-${i}`}>
-                {/* Wick */}
                 <line
                   x1={x + candleW / 2} y1={getY(c.h)}
                   x2={x + candleW / 2} y2={getY(c.l)}
-                  stroke={color} strokeWidth={isHovered ? 2 : 1}
+                  stroke={color} strokeWidth={isHovered ? 2 : 0.8}
+                  opacity={isHovered ? 1 : 0.3}
                 />
-                {/* Body */}
                 <rect
-                  x={x + 1} y={bodyY}
-                  width={Math.max(2, candleW - 2)} height={bodyH}
-                  fill={isUp ? COL.BG : color}
-                  stroke={color} strokeWidth={isHovered ? 2 : 1.2}
+                  x={x + 1.5} y={bodyY}
+                  width={Math.max(1, candleW - 3)} height={bodyH}
+                  fill={isUp ? "transparent" : color}
+                  stroke={color} strokeWidth={isHovered ? 2 : 1}
                   rx={0.5}
                 />
-                {/* Glow on hover */}
                 {isHovered && (
                   <rect
-                    x={x - 1} y={bodyY - 2}
-                    width={candleW + 2} height={bodyH + 4}
-                    fill="none" stroke={color} strokeWidth="0.5" opacity={0.4}
-                    rx={2}
+                    x={x - 2} y={bodyY - 4}
+                    width={candleW + 4} height={bodyH + 8}
+                    fill={color} opacity={0.1} rx={4}
                   />
                 )}
               </g>
@@ -392,7 +498,7 @@ export default function MainCandleChart() {
           )}
 
           {/* ── Trade Execution Markers ───────────────────────────────── */}
-          {relevant.map((c, i) => {
+          {displayCandles.map((c, i) => {
             const ts = new Date(c.t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
             const trade = myTrades.find((t) => t.time === ts);
             if (!trade) return null;
@@ -421,46 +527,63 @@ export default function MainCandleChart() {
             strokeWidth="1" strokeDasharray="3 3" opacity={0.35}
           />
 
-          {/* ── Neural Prediction Line (RED) ─────────────────────────── */}
+          {/* ── Bollinger Bands ────────────────────────────────────────── */}
+          <path
+            fill="rgba(56, 189, 248, 0.03)"
+            stroke="rgba(56, 189, 248, 0.15)"
+            strokeWidth="0.5"
+            d={(() => {
+              const upper = bb.map((v, i) => v ? `${getX(i) + candleW / 2},${getY(v.u)}` : "").filter(Boolean);
+              const lower = bb.map((v, i) => v ? `${getX(i) + candleW / 2},${getY(v.l)}` : "").filter(Boolean).reverse();
+              if (upper.length === 0) return "";
+              return `M ${upper.join(" L ")} L ${lower.join(" L ")} Z`;
+            })()}
+          />
+
+          {/* ── Neural Prediction Cone (Enhanced) ─────────────────────── */}
           {(() => {
-            const lookback = 10;
+            const lookback = 12;
             const slice = relevant.slice(-lookback);
             if (slice.length < lookback) return null;
             
-            // Linear Regression / Momentum Slope
             const avgY = slice.reduce((acc, c) => acc + c.c, 0) / lookback;
             const avgX = lookback / 2;
-            let num = 0;
-            let den = 0;
+            let num = 0, den = 0;
             slice.forEach((c, i) => {
               num += (i - avgX) * (c.c - avgY);
               den += (i - avgX) * (i - avgX);
             });
-            const m = den === 0 ? 0 : num / den; // Slope
+            const m = den === 0 ? 0 : num / den; 
             
-            // Project 10 candles forward
             const x1 = getX(relevant.length - 1) + candleW/2;
             const y1 = getY(lastCandle.c);
-            const x2 = x1 + (candleW * 5);
-            const y2 = getY(lastCandle.c + (m * 5));
+            const steps = 10;
+            const x2 = x1 + (candleW * steps);
+            const y2 = getY(lastCandle.c + (m * steps));
+
+            // Standard deviation for cone width
+            const s = Math.sqrt(slice.reduce((acc, c) => acc + (c.c - (lastCandle.c + m * (slice.indexOf(c) - 11))) ** 2, 0) / lookback);
+            const coneWidth = getY(lastCandle.c - s * 3) - getY(lastCandle.c + s * 3);
 
             return (
               <g>
                 <defs>
                   <linearGradient id="predGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                    <stop offset="0%" stopColor={COL.RED} stopOpacity="0.8" />
-                    <stop offset="100%" stopColor={COL.RED} stopOpacity="0.2" />
+                    <stop offset="0%" stopColor="#f87171" stopOpacity="0.4" />
+                    <stop offset="100%" stopColor="#f87171" stopOpacity="0" />
                   </linearGradient>
                 </defs>
+                {/* Probability Cone */}
+                <path 
+                  d={`M ${x1},${y1} L ${x2},${y2 - coneWidth/2} L ${x2},${y2 + coneWidth/2} Z`}
+                  fill="url(#predGrad)"
+                />
                 <line 
                   x1={x1} y1={y1} x2={x2} y2={y2} 
-                  stroke="url(#predGrad)" strokeWidth="2" strokeDasharray="5 3" 
+                  stroke="#f87171" strokeWidth="1.5" strokeDasharray="4 4" 
                   className="animate-pulse"
                 />
-                <circle cx={x2} cy={y2} r={3} fill={COL.RED} className="animate-ping" />
-                <text x={x2 + 8} y={y2 + 4} fill={COL.RED} fontSize="9" fontWeight="900" className="opacity-60">
-                   PROJECTED
-                </text>
+                <circle cx={x2} cy={y2} r={3} fill="#f87171" className="animate-ping" />
               </g>
             );
           })()}
@@ -543,13 +666,13 @@ export default function MainCandleChart() {
               <div className="col-span-2 flex justify-between gap-3 pt-1 border-t border-white/5 mt-1">
                 <span className="text-white/20">Volume</span>
                 <span className="text-amber-400/70 font-bold">
-                  {hoverData.v > 1000 ? (hoverData.v / 1000).toFixed(1) + "K" : hoverData.v.toFixed(2)}
+                  {hoverData.v && hoverData.v > 1000 ? (hoverData.v / 1000).toFixed(1) + "K" : (hoverData.v || 0).toFixed(2)}
                 </span>
               </div>
               <div className="col-span-2 flex justify-between gap-3">
                 <span className="text-white/20">Change</span>
                 <span className={`font-bold ${hoverData.c >= hoverData.o ? "text-emerald-400" : "text-red-400"}`}>
-                  {((hoverData.c - hoverData.o) / hoverData.o * 100).toFixed(3)}%
+                  {hoverData.o > 0 ? ((hoverData.c - hoverData.o) / hoverData.o * 100).toFixed(3) : "0.000"}%
                 </span>
               </div>
             </div>
@@ -558,8 +681,8 @@ export default function MainCandleChart() {
       </div>
 
       {/* ═══ BOTTOM BAR: Coin Switcher + Bot Stats ════════════════════════════ */}
-      <div className="bg-[#161a1e] px-4 py-2 flex items-center justify-between border-t border-white/[0.04] shrink-0">
-        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+      <div className="bg-white/[0.02] px-6 py-3 flex items-center justify-between border-t border-white/[0.04] shrink-0">
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
           {activeCoins.map((coin) => {
             const coinData = marketData[coin];
             const change = coinData?.gain;
@@ -567,16 +690,16 @@ export default function MainCandleChart() {
               <button
                 key={coin}
                 onClick={() => setSelectedCoin(coin)}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-black whitespace-nowrap transition-all ${
+                className={`flex items-center gap-3 px-4 py-2 rounded-xl text-[10px] font-black whitespace-nowrap transition-all ${
                   selectedCoin === coin
-                    ? "bg-[#2b3139] text-[#f0b90b] border border-[#f0b90b]/20"
-                    : "text-white/25 hover:text-white/50 hover:bg-white/[0.03]"
+                    ? "bg-indigo-500/20 text-indigo-400 border border-indigo-500/30"
+                    : "text-white/20 hover:text-white/50 bg-white/[0.02] border border-white/[0.03]"
                 }`}
               >
                 <span>{coin}</span>
                 {coinData?.price && (
-                  <span className={`text-[9px] font-mono ${
-                    change && change >= 0 ? "text-emerald-400/60" : "text-red-400/60"
+                  <span className={`text-[9px] font-mono font-bold ${
+                    change && change >= 0 ? "text-emerald-400" : "text-red-400"
                   }`}>
                     {formatPrice(coinData.price, coin)}
                   </span>

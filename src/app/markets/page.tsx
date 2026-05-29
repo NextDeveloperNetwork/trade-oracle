@@ -24,7 +24,7 @@ export default function MarketsPage() {
   const [loading, setLoading] = useState(true);
   type FilterMode = "all" | "gainers" | "promising" | "volatile" | "bot";
   const [filterMode, setFilterMode] = useState<FilterMode>("all");
-  const [selectedBotFilter, setSelectedBotFilter] = useState<string>("SCALPER");
+  const [selectedBotFilter, setSelectedBotFilter] = useState<string>("ORACLE_ELITE");
 
   const ORACLE_AUTH_TOKEN = "oracle_default_secret_9988";
 
@@ -79,16 +79,7 @@ export default function MarketsPage() {
         const low = parseFloat(c.low);
         
         switch (selectedBotFilter) {
-          case "SCALPER": return spread > 0.05 && gain > 0;
-          case "TREND": return gain > 5;
-          case "REVERSION": return gain < -5;
-          case "BREAKOUT": return price > high * 0.98;
-          case "MOMENTUM": return gain > 8 && spread > 0.08;
-          case "VWAP": return spread < 0.03;
-          case "AGGRESSIVE": return spread > 0.1 && parseFloat(c.volume) > 10000000;
-          case "SWING": return gain > -2 && gain < 2;
-          case "HYPER": return spread > 0.15;
-          case "SNIPER": return price < low * 1.02;
+          case "ORACLE_ELITE": return spread > 0.03 && gain > -10 && gain < 15;
           default: return true;
         }
       });
@@ -179,7 +170,7 @@ export default function MarketsPage() {
                   <div key={coin} className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5 group transition-all hover:bg-white/10">
                     <div className="flex flex-col">
                       <span className="font-mono text-xs font-bold">{coin}</span>
-                      {hasBalance && <span className="text-[8px] font-mono font-black text-[var(--color-crypto-green)] tracking-tighter">${usdValue.toFixed(2)}</span>}
+                      {hasBalance && <span className="text-[8px] font-mono font-black text-[var(--color-crypto-green)] tracking-tighter">${usdValue.toFixed(3)}</span>}
                     </div>
                     <button 
                       onClick={() => !hasBalance && removeCoin(coin)} 
@@ -223,12 +214,12 @@ export default function MarketsPage() {
                       <div className="text-right">
                         <div className="text-sm font-black font-mono text-white tracking-tighter">
                           ${parseFloat(market.price).toLocaleString(undefined, { 
-                            minimumFractionDigits: 2, 
-                            maximumFractionDigits: market.price.startsWith("0.00") ? 6 : 2 
+                            minimumFractionDigits: 3, 
+                            maximumFractionDigits: market.price.startsWith("0.00") ? 6 : 3 
                           })}
                         </div>
                         <div className={`text-[9px] font-bold font-mono mt-0.5 ${parseFloat(market.gain) >= 0 ? 'text-[var(--color-crypto-green)]' : 'text-[var(--color-crypto-red)]'}`}>
-                          {parseFloat(market.gain) >= 0 ? '+' : ''}{parseFloat(market.gain).toFixed(1)}%
+                          {parseFloat(market.gain) >= 0 ? '+' : ''}{parseFloat(market.gain).toFixed(3)}%
                         </div>
                       </div>
                     </div>

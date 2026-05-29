@@ -6,6 +6,25 @@ const SECRET_KEY = process.env.BINANCE_SECRET_KEY;
 const IS_US = process.env.IS_BINANCE_US === "true";
 const BASE_URL = IS_US ? "https://api.binance.us" : "https://api.binance.com";
 
+let timeOffset = 0;
+let lastOffsetSync = 0;
+
+async function getBinanceTimestamp(): Promise<number> {
+  const now = Date.now();
+  // Re-sync offset every 30 seconds
+  if (now - lastOffsetSync > 30_000) {
+    try {
+      const res = await fetch(`${BASE_URL}/api/v3/time`);
+      const data = await res.json();
+      timeOffset = data.serverTime - Date.now();
+      lastOffsetSync = Date.now();
+    } catch {
+      // If sync fails, use last known offset
+    }
+  }
+  return Date.now() + timeOffset;
+}
+
 function generateSignature(queryString: string, secret: string) {
   return crypto
     .createHmac("sha256", secret)
@@ -99,8 +118,22 @@ export async function GET(req: Request) {
     }
   }
 
-  const timestamp = Date.now();
-  const queryString = `timestamp=${timestamp}&recvWindow=5000`; // Reduced window for security
+  if (type === "klines") {
+    const symbol = searchParams.get("symbol") || "BTCUSDT";
+    const interval = searchParams.get("interval") || "1h";
+    const limit = searchParams.get("limit") || "100";
+    try {
+      const res = await fetch(`${BASE_URL}/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`);
+      const data = await res.json();
+      return NextResponse.json(data);
+    } catch (e: any) {
+      console.error("Klines Fetch Error:", e.message);
+      return NextResponse.json({ error: "Failed to fetch klines" }, { status: 500 });
+    }
+  }
+
+  const timestamp = await getBinanceTimestamp();
+  const queryString = `timestamp=${timestamp}&recvWindow=5000`;
   const signature = generateSignature(queryString, SECRET_KEY);
 
   try {
@@ -154,7 +187,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invalid symbol format" }, { status: 400 });
     }
 
-    const timestamp = Date.now();
+    const timestamp = await getBinanceTimestamp();
     const upperSym = symbol.toUpperCase();
     const pair = upperSym.endsWith("USDT") ? upperSym : `${upperSym}USDT`;
 

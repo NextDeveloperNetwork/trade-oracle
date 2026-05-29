@@ -1,0 +1,69 @@
+generator client {
+  provider   = "prisma-client-js"
+  engineType = "library"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Trade {
+  id        String   @id @default(cuid())
+  time      DateTime @default(now())
+  coin      String
+  action    String
+  amount    Float
+  price     Float
+  totalUSDT Float
+  strategy  String?
+  mode      String   @default("PAPER")
+}
+
+model Position {
+  id         String   @id @default(cuid())
+  coin       String
+  entryTime  DateTime @default(now())
+  entryPrice Float
+  amount     Float
+  invested   Float
+  strategy   String?
+  mode       String   @default("PAPER")
+
+  @@unique([coin, mode])
+}
+
+
+model CompletedTrade {
+  id         String   @id @default(cuid())
+  coin       String
+  entryTime  DateTime
+  exitTime   DateTime @default(now())
+  entryPrice Float
+  exitPrice  Float
+  amount     Float
+  invested   Float
+  returned   Float
+  fee        Float    @default(0)
+  profit     Float
+  netProfit  Float    @default(0)
+  profitPct  Float
+  strategy   String?
+  mode       String   @default("PAPER")
+}
+
+model BalanceSnapshot {
+  id        String   @id @default(cuid())
+  time      DateTime @default(now())
+  totalUSDT Float
+  mode      String   @default("PAPER")
+}
+
+model UserConfig {
+  id               String @id @default("oracle_config")
+  feeRecovery      Float  @default(0.2)
+  netTarget        Float  @default(0.5)
+  stopLoss         Float  @default(-1.5)
+  allocationPct    Float  @default(10.0)
+  maxOpenPositions Int    @default(5)
+  activeCoins      String[] @default(["BTC", "ETH", "XRP"])
+}
