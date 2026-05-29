@@ -142,7 +142,7 @@ export default function MarketsPage() {
               >
                 {(Object.keys(STRATEGY_INFO) as (keyof typeof STRATEGY_INFO)[]).map(s => (
                   <option key={s} value={s} className="bg-neutral-900 text-white">
-                    {STRATEGY_INFO[s].name}
+                    {STRATEGY_INFO[s]?.name}
                   </option>
                 ))}
               </select>

@@ -148,7 +148,7 @@ export default function Header() {
               className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all text-[11px] font-mono font-bold"
             >
               <Cpu size={12} className="text-white/40" />
-              <span className={STRATEGY_INFO[currentStrategy].color}>{STRATEGY_INFO[currentStrategy].name}</span>
+              <span className={STRATEGY_INFO[currentStrategy]?.color || "text-white"}>{STRATEGY_INFO[currentStrategy]?.name || "UNKNOWN"}</span>
               <ChevronDown size={10} className="text-white/30" />
             </button>
             {dropdownOpen && (
@@ -161,10 +161,10 @@ export default function Header() {
                     className={`w-full flex items-center justify-between px-4 py-2.5 text-left border-b border-white/5 last:border-0 hover:bg-white/5 transition-colors first:rounded-t-2xl last:rounded-b-2xl ${currentStrategy === s ? "bg-white/10" : ""}`}
                   >
                     <div className="flex flex-col">
-                      <span className={`text-[11px] font-mono font-black ${STRATEGY_INFO[s].color}`}>{STRATEGY_INFO[s].name}</span>
-                      <span className="text-[9px] text-white/30 font-mono">{STRATEGY_INFO[s].desc}</span>
+                      <span className={`text-[11px] font-mono font-black ${STRATEGY_INFO[s]?.color || "text-white"}`}>{STRATEGY_INFO[s]?.name || "UNKNOWN"}</span>
+                      <span className="text-[9px] text-white/30 font-mono">{STRATEGY_INFO[s]?.desc || "No Description"}</span>
                     </div>
-                    <span className="text-[8px] font-black px-2 py-0.5 rounded border border-white/20 text-white/40">{STRATEGY_INFO[s].risk}</span>
+                    <span className="text-[8px] font-black px-2 py-0.5 rounded border border-white/20 text-white/40">{STRATEGY_INFO[s]?.risk || "???"}</span>
                   </button>
                 ))}
                 <AP>
@@ -175,19 +175,19 @@ export default function Header() {
                       exit={{ opacity: 0, x: -10 }}
                       className="absolute right-[calc(100%+12px)] top-0 w-[240px] bg-[#0d1117] border border-white/10 rounded-2xl p-4 shadow-2xl z-[210]"
                     >
-                      <div className={`text-[11px] font-black uppercase tracking-widest mb-2 ${STRATEGY_INFO[contextStrategy].color}`}>
-                        {STRATEGY_INFO[contextStrategy].name} Analysis
+                      <div className={`text-[11px] font-black uppercase tracking-widest mb-2 ${STRATEGY_INFO[contextStrategy]?.color || "text-white"}`}>
+                        {STRATEGY_INFO[contextStrategy]?.name || "Strategy"} Analysis
                       </div>
                       <p className="text-[10px] text-white/60 font-mono leading-relaxed">
-                        {STRATEGY_INFO[contextStrategy].extendedDesc}
+                        {STRATEGY_INFO[contextStrategy]?.extendedDesc || "No extended details available for this strategy."}
                       </p>
                       <div className="mt-3 pt-3 border-t border-white/5 flex items-center justify-between">
                         <span className="text-[8px] text-white/20 uppercase font-black">Risk Profile</span>
                         <span className={`text-[9px] font-black ${
-                          STRATEGY_INFO[contextStrategy].risk === "HIGH" ? "text-red-400" :
-                          STRATEGY_INFO[contextStrategy].risk === "MED" ? "text-orange-400" :
+                          STRATEGY_INFO[contextStrategy]?.risk === "HIGH" ? "text-red-400" :
+                          STRATEGY_INFO[contextStrategy]?.risk === "MED" ? "text-orange-400" :
                           "text-emerald-400"
-                        }`}>{STRATEGY_INFO[contextStrategy].risk}</span>
+                        }`}>{STRATEGY_INFO[contextStrategy]?.risk || "N/A"}</span>
                       </div>
                     </m.div>
                   )}
