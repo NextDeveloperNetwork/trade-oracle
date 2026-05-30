@@ -439,8 +439,10 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
 
       if (action === "BUY") {
         const available = balancesRef.current.USDT || 0;
-        if (available < usdtAmount) {
-          toast.error(`Insufficient USDT (${available.toFixed(2)}).`);
+        const safeAvailable = Math.max(0, available - SAFE_RESERVE);
+        if (safeAvailable < usdtAmount) {
+          toast.error(`Action Blocked: Minimal Reserve Protection ($${SAFE_RESERVE}) Active.`);
+          isTradeLockRef.current = false;
           return false;
         }
 
@@ -726,8 +728,13 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
         }
 
         const bal = balancesRef.current[from] || 0;
-        if (bal < amount) {
-          toast.error(`Insufficient ${from} balance`);
+        const requiredReserve = from === "USDT" ? SAFE_RESERVE : 0;
+        
+        if (bal - requiredReserve < amount) {
+          toast.error(from === "USDT" 
+            ? `Action Blocked: Minimal Reserve Protection ($${SAFE_RESERVE}) Active.`
+            : `Insufficient ${from} balance`
+          );
           return false;
         }
 
