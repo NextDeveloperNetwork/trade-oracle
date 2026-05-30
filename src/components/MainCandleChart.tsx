@@ -178,9 +178,12 @@ export default function MainCandleChart() {
   // ─── Chart Geometry ────────────────────────────────────────────────────────
   const width = chartRef.current?.clientWidth || 800;
   const height = 440;
-  const PAD = { top: 10, bottom: 70, right: 65, left: 0 };
+  const PAD = { top: 10, bottom: 70, right: 120, left: 0 }; // Increased right pad
+  
   const chartH = height - PAD.top - PAD.bottom;
-  const chartW = width - PAD.right - PAD.left;
+  // Reserve 20% for prediction space
+  const predSpace = width * 0.20;
+  const chartW = width - predSpace - PAD.left;
 
   const validCandles = relevant.filter(c => 
     typeof c.o === 'number' && !isNaN(c.o) &&
@@ -369,9 +372,9 @@ export default function MainCandleChart() {
           </span>
         </div>
 
-        {/* Y-Axis Labels */}
+        {/* Y-Axis Labels (Anchor to actual right edge) */}
         <div className="absolute top-0 h-full flex flex-col justify-between pointer-events-none z-30"
-          style={{ right: 0, width: PAD.right, paddingTop: PAD.top, paddingBottom: PAD.bottom }}
+          style={{ right: 8, width: 80, paddingTop: PAD.top, paddingBottom: PAD.bottom }}
         >
           {[...Array(8)].map((_, i) => {
             const price = max - (i * (range / 7));
@@ -389,15 +392,15 @@ export default function MainCandleChart() {
             <line
               key={`h${i}`}
               x1={0} y1={PAD.top + (i * chartH) / 7}
-              x2={chartW} y2={PAD.top + (i * chartH) / 7}
+              x2={width} y2={PAD.top + (i * chartH) / 7}
               stroke="white" strokeOpacity="0.025" strokeWidth="0.5"
             />
           ))}
-          {[...Array(12)].map((_, i) => (
+          {[...Array(15)].map((_, i) => (
             <line
               key={`v${i}`}
-              x1={PAD.left + (i * chartW) / 12} y1={0}
-              x2={PAD.left + (i * chartW) / 12} y2={height}
+              x1={PAD.left + (i * width) / 15} y1={0}
+              x2={PAD.left + (i * width) / 15} y2={height}
               stroke="white" strokeOpacity="0.02" strokeWidth="0.5"
             />
           ))}
@@ -522,7 +525,7 @@ export default function MainCandleChart() {
 
           {/* ── Current Price Line ────────────────────────────────────── */}
           <line
-            x1={0} y1={getY(lastCandle.c)} x2={chartW} y2={getY(lastCandle.c)}
+            x1={0} y1={getY(lastCandle.c)} x2={width} y2={getY(lastCandle.c)}
             stroke={lastCandle.c >= lastCandle.o ? COL.GREEN : COL.RED}
             strokeWidth="1" strokeDasharray="3 3" opacity={0.35}
           />
@@ -557,13 +560,11 @@ export default function MainCandleChart() {
             
             const x1 = getX(relevant.length - 1) + candleW/2;
             const y1 = getY(lastCandle.c);
-            const steps = 10;
-            const x2 = x1 + (candleW * steps);
-            const y2 = getY(lastCandle.c + (m * steps));
+            const x2 = width - 20; 
+            const y2 = getY(lastCandle.c + (m * 25)); 
 
-            // Standard deviation for cone width
             const s = Math.sqrt(slice.reduce((acc, c) => acc + (c.c - (lastCandle.c + m * (slice.indexOf(c) - 11))) ** 2, 0) / lookback);
-            const coneWidth = getY(lastCandle.c - s * 3) - getY(lastCandle.c + s * 3);
+            const coneWidth = Math.max(20, getY(lastCandle.c - s * 5) - getY(lastCandle.c + s * 5));
 
             return (
               <g>
@@ -573,17 +574,21 @@ export default function MainCandleChart() {
                     <stop offset="100%" stopColor="#f87171" stopOpacity="0" />
                   </linearGradient>
                 </defs>
-                {/* Probability Cone */}
                 <path 
                   d={`M ${x1},${y1} L ${x2},${y2 - coneWidth/2} L ${x2},${y2 + coneWidth/2} Z`}
                   fill="url(#predGrad)"
                 />
                 <line 
                   x1={x1} y1={y1} x2={x2} y2={y2} 
-                  stroke="#f87171" strokeWidth="1.5" strokeDasharray="4 4" 
+                  stroke="#f87171" strokeWidth="2" strokeDasharray="6 4" 
                   className="animate-pulse"
                 />
-                <circle cx={x2} cy={y2} r={3} fill="#f87171" className="animate-ping" />
+                <circle cx={x2} cy={y2} r={4} fill="#f87171" className="animate-ping" />
+                
+                <rect x={x2 - 15} y={y2 - 25} width={30} height={12} fill="#f87171" rx={2} opacity={0.8} />
+                <text x={x2} y={y2 - 16} fill="white" fontSize="7" fontWeight="900" textAnchor="middle" fontFamily="monospace">
+                  AI
+                </text>
               </g>
             );
           })()}
@@ -591,11 +596,11 @@ export default function MainCandleChart() {
           {/* ── Crosshair ────────────────────────────────────────────── */}
           {hoverIdx !== null && (
             <g>
-              <line x1={0} y1={mousePos.y} x2={chartW} y2={mousePos.y} stroke={COL.CROSSHAIR} strokeWidth="0.5" strokeDasharray="4 3" />
+              <line x1={0} y1={mousePos.y} x2={width} y2={mousePos.y} stroke={COL.CROSSHAIR} strokeWidth="0.5" strokeDasharray="4 3" />
               <line x1={mousePos.x} y1={0} x2={mousePos.x} y2={height - PAD.bottom} stroke={COL.CROSSHAIR} strokeWidth="0.5" strokeDasharray="4 3" />
               {/* Price label on Y axis */}
-              <rect x={chartW} y={mousePos.y - 10} width={PAD.right} height={20} fill="#1e2329" />
-              <text x={chartW + 4} y={mousePos.y + 4} fill="white" fontSize="9" fontFamily="monospace" fontWeight="700">
+              <rect x={width - 80} y={mousePos.y - 10} width={80} height={20} fill="#1e2329" />
+              <text x={width - 76} y={mousePos.y + 4} fill="white" fontSize="9" fontFamily="monospace" fontWeight="700">
                 {formatPrice(max - ((mousePos.y - PAD.top) / chartH) * range, selectedCoin)}
               </text>
               {/* Time label at bottom */}
@@ -617,7 +622,7 @@ export default function MainCandleChart() {
           style={{
             top: getY(lastCandle.c) - 9,
             right: 0,
-            width: PAD.right,
+            width: 80,
             textAlign: "center",
             backgroundColor: lastCandle.c >= lastCandle.o ? COL.GREEN : COL.RED,
             color: "#000",

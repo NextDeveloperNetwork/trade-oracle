@@ -83,6 +83,8 @@ export default function HoldingsTable() {
               <th className="px-4 py-5 text-[9px] font-black uppercase tracking-[0.2em] text-center">Entry V.</th>
               <th className="px-4 py-5 text-[9px] font-black uppercase tracking-[0.2em] text-center">Live V.</th>
               <th className="px-4 py-5 text-[9px] font-black uppercase tracking-[0.2em] text-center">Fee</th>
+              <th className="px-4 py-5 text-[9px] font-black uppercase tracking-[0.2em] text-center">Exit Target</th>
+              <th className="px-4 py-5 text-[9px] font-black uppercase tracking-[0.2em] text-center">Target P&L</th>
               <th className="px-4 py-5 text-[9px] font-black uppercase tracking-[0.2em] text-center">ROI %</th>
               <th className="px-4 py-5 text-[9px] font-black uppercase tracking-[0.2em] text-right">P&L Value</th>
               <th className="pr-8 py-5 text-[9px] font-black uppercase tracking-[0.2em] text-right">Ops</th>
@@ -188,6 +190,37 @@ export default function HoldingsTable() {
                           ${estTotalFee.toFixed(4)}
                         </span>
                         <span className="text-[7px] text-white/10 uppercase font-black tracking-tighter">Exchange Fee</span>
+                      </div>
+                    ) : <span className="text-white/5">—</span>}
+                  </td>
+
+                  {/* Exit Target */}
+                  <td className="px-4 py-5 text-center">
+                    {asset !== "USDT" && totalInvested > 0 && amount > 0 ? (
+                      (() => {
+                        const sideFee = (botSettings.feeRecovery || 0.2) / 200;
+                        const targetPrice = (totalInvested * (1 + (botSettings.netTarget || 0.5) / 100)) / (amount * (1 - sideFee));
+                        const isHit = currentPrice >= targetPrice;
+                        return (
+                          <div className="flex flex-col items-center">
+                            <span className={`text-[13px] font-black font-mono tracking-tighter ${isHit ? 'text-emerald-400' : 'text-amber-500/80'}`}>
+                              ${targetPrice.toLocaleString('en-US', { minimumFractionDigits: getDecimals(asset) })}
+                            </span>
+                            <span className="text-[7px] text-white/20 uppercase font-black tracking-tighter">Min Exit Price</span>
+                          </div>
+                        );
+                      })()
+                    ) : <span className="text-white/5">—</span>}
+                  </td>
+
+                  {/* Target P&L */}
+                  <td className="px-4 py-5 text-center">
+                    {asset !== "USDT" && totalInvested > 0 ? (
+                      <div className="flex flex-col items-center">
+                        <span className="text-[13px] font-black text-indigo-400 font-mono tracking-tighter">
+                          +${(totalInvested * ((botSettings.netTarget || 0.5) / 100)).toFixed(4)}
+                        </span>
+                        <span className="text-[7px] text-white/20 uppercase font-black tracking-tighter">Net On Exit</span>
                       </div>
                     ) : <span className="text-white/5">—</span>}
                   </td>

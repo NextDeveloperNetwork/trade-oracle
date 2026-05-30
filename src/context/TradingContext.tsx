@@ -129,6 +129,20 @@ const calculateATR = (candles: Candle[], period = 14) => {
   return trSum / period;
 };
 
+/**
+ * Calculates the exact exit price required to clear entry/exit fees 
+ * and secure the desired net profit percentage.
+ */
+const calculateMinimumExitPrice = (
+  invested: number,
+  amount: number,
+  feeRate: number, // decimal per side, e.g. 0.001
+  netTargetPct: number // %
+): number => {
+  const targetUSDT = invested * (1 + netTargetPct / 100);
+  return targetUSDT / (amount * (1 - feeRate));
+};
+
 const TradingContext = createContext<TradingContextType | undefined>(undefined);
 
 export function TradingProvider({ children }: { children: React.ReactNode }) {
@@ -601,12 +615,14 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
         const r = rsi(closes);
         if (isNaN(r)) continue;
 
-        const hasPos = openPositionsRef.current.some(p => p.coin === coin);
+        const position = openPositionsRef.current.find(p => p.coin === coin);
+        const hasPos = !!position;
 
         // Update indicators
         setMarketData(prev => {
           if (prev[coin]?.rsiValue === r) return prev;
-          return { ...prev, [coin]: { ...prev[coin], rsiValue: r } };
+          const status = hasPos ? prev[coin]?.botStatus : "Scanning...";
+          return { ...prev, [coin]: { ...prev[coin], rsiValue: r, botStatus: status } };
         });
 
         if (r < 40) {
@@ -625,10 +641,30 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
             }
           }
         } else if (r > 60) {
-          logSignal(coin, "SELL", data.price || 0, r);
-          if (autoTradeRef.current && hasPos) {
-            tradeExecutedThisTick = true;
-            executeTradeRef.current("SELL", coin, 0).catch(console.error);
+          let isFeeSafe = true;
+          let minPrice = 0;
+
+          if (position) {
+            const feeRate = (botSettingsRef.current.feeRecovery || 0.2) / 200;
+            minPrice = calculateMinimumExitPrice(position.invested, position.amount, feeRate, botSettingsRef.current.netTarget);
+            isFeeSafe = (data.price || 0) >= minPrice;
+          }
+
+          if (isFeeSafe) {
+            logSignal(coin, "SELL", data.price || 0, r);
+            if (autoTradeRef.current && hasPos) {
+              tradeExecutedThisTick = true;
+              executeTradeRef.current("SELL", coin, 0).catch(console.error);
+            }
+          } else if (position) {
+            // Signal log for Fee Trap protection
+            if (tickCount % 6 === 0) { 
+              const shortfallPct = ((minPrice - (data.price || 0)) / (data.price || 0)) * 100;
+              setMarketData(prev => ({
+                ...prev,
+                [coin]: { ...prev[coin], botStatus: `FEE TRAP: Need +${shortfallPct.toFixed(2)}%` }
+              }));
+            }
           }
         } else if (tickCount % 12 === 0) { // Every minute status for confidence
           logSignal(coin, "HOLD", data.price || 0, r);
