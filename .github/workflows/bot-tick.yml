@@ -1,0 +1,16 @@
+name: Bot Tick
+
+on:
+  schedule:
+    # Runs every minute, 24/7
+    - cron: '* * * * *'
+  workflow_dispatch: # allows manual trigger from GitHub UI
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping bot tick endpoint
+        run: |
+          curl -s -o /dev/null -w "Status: %{http_code}" \
+            https://traineeship-erasmus.vercel.app/api/bot/tick
