@@ -629,6 +629,7 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
 
 
 
+
         // Update indicators
         setMarketData(prev => {
           if (prev[coin]?.rsiValue === r) return prev;
