@@ -177,7 +177,7 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
     const { total, isStale } = calculateTotalUSDT();
     if (isStale && totalUSDT > 0) return;
     setTotalUSDT(total);
-    
+
     // Cloud sync handled in specific setters and hydration
 
     // ── FINANCIAL TELEMETRY HUB ──
@@ -220,8 +220,8 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
         const lastCandle = formatted[formatted.length - 1];
         setMarketData(prev => ({
           ...prev,
-          [coin]: { 
-            ...prev[coin], 
+          [coin]: {
+            ...prev[coin],
             candleHistory: formatted,
             price: prev[coin]?.price || lastCandle?.c || null,
             prevPrice: prev[coin]?.prevPrice || lastCandle?.o || null,
@@ -327,7 +327,7 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
           // If this is the same candle, replace it. If new, push it.
           const last = hist[hist.length - 1];
           const isNewCandle = !last || last.t !== candle.t;
-          
+
           const newHist = isNewCandle
             ? [...hist.slice(hist.length >= 200 ? 1 : 0), candle]
             : [...hist.slice(0, -1), candle];
@@ -445,14 +445,14 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
         const feeAmount = usdtAmount * feeRate;
         const netUsdt = usdtAmount - feeAmount;
         const amount = netUsdt / price;
-        
+
         const setBalFn = isLiveMode ? setLiveBalances : setPaperBalances;
         setBalFn(prev => ({ ...prev, USDT: (prev.USDT || 0) - usdtAmount, [coin]: (prev[coin] || 0) + amount }));
-        
+
         if (!isLiveMode) {
-           // Sync Paper Balances
-           fetch("/api/paper-balance", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ asset: "USDT", amount: (balancesRef.current.USDT || 0) - usdtAmount }) }).catch(console.error);
-           fetch("/api/paper-balance", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ asset: coin, amount: (balancesRef.current[coin] || 0) + amount }) }).catch(console.error);
+          // Sync Paper Balances
+          fetch("/api/paper-balance", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ asset: "USDT", amount: (balancesRef.current.USDT || 0) - usdtAmount }) }).catch(console.error);
+          fetch("/api/paper-balance", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ asset: coin, amount: (balancesRef.current[coin] || 0) + amount }) }).catch(console.error);
         }
 
         const newPos = { coin, entryTime: new Date().toISOString(), entryPrice: price, amount, invested: usdtAmount, strategy: strategyRef.current };
@@ -482,7 +482,7 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
       } else {
         const posIdx = openPositionsRef.current.findIndex(p => p.coin === coin);
         const pos = posIdx !== -1 ? openPositionsRef.current[posIdx] : null;
-        
+
         // Dynamic amount determination: if position exists use pos.amount, else use full wallet balance
         // Round to 6 decimals to safely clear Binance stepSize filters for most pairs
         const sellAmount = parseFloat((pos ? pos.amount : (balancesRef.current[coin] || 0)).toFixed(6));
@@ -521,14 +521,14 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
 
         const completed: CompletedTrade = {
           id: "ct-" + Math.random().toString(36).slice(2, 10),
-          coin, 
-          entryTime: pos ? pos.entryTime : new Date().toISOString(), 
+          coin,
+          entryTime: pos ? pos.entryTime : new Date().toISOString(),
           exitTime: new Date().toISOString(),
-          entryPrice: pos ? pos.entryPrice : price, 
-          exitPrice: price, 
+          entryPrice: pos ? pos.entryPrice : price,
+          exitPrice: price,
           amount: sellAmount,
           invested, returned, fee, profit, netProfit: profit - fee,
-          profitPct: pos ? (profit / pos.invested) * 100 : 0, 
+          profitPct: pos ? (profit / pos.invested) * 100 : 0,
           strategy: pos ? pos.strategy : "MANUAL_CONVERSION"
         };
 
@@ -627,6 +627,8 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
         const position = openPositionsRef.current.find(p => p.coin === coin);
         const hasPos = !!position;
 
+
+
         // Update indicators
         setMarketData(prev => {
           if (prev[coin]?.rsiValue === r) return prev;
@@ -667,7 +669,7 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
             }
           } else if (position) {
             // Signal log for Fee Trap protection
-            if (tickCount % 6 === 0) { 
+            if (tickCount % 6 === 0) {
               const shortfallPct = ((minPrice - (data.price || 0)) / (data.price || 0)) * 100;
               setMarketData(prev => ({
                 ...prev,
@@ -692,7 +694,7 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
       isLiveMode, toggleLiveMode: async () => {
         const nextMode = !isLiveMode;
         setIsLiveMode(nextMode);
-        
+
         // Cloud Sync Mode
         await fetch("/api/config", {
           method: "POST",
@@ -707,7 +709,7 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
         const startTime = nextState ? new Date().toISOString() : null;
         setAutoTradeStartedAt(startTime);
         toast.success(`Autonomous Trading ${nextState ? 'ENGAGED' : 'PAUSED'}`);
-        
+
         // Cloud Sync Bot Status
         await fetch("/api/config", {
           method: "POST",
@@ -716,9 +718,9 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
         }).catch(console.error);
       },
       currentStrategy, setStrategy,
-      balances, setUSDTBalance: async (a) => { 
-        setPaperBalances(p => ({ ...p, USDT: a })); 
-        setPaperInitial(a); 
+      balances, setUSDTBalance: async (a) => {
+        setPaperBalances(p => ({ ...p, USDT: a }));
+        setPaperInitial(a);
         await fetch("/api/paper-balance", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -761,7 +763,7 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
         if (from === to) return false;
         const fromPrice = from === "USDT" ? 1 : (marketDataRef.current[from]?.price || 0);
         const toPrice = to === "USDT" ? 1 : (marketDataRef.current[to]?.price || 0);
-        
+
         if (!fromPrice || !toPrice) {
           toast.error("Exchange Error: Pricing data missing");
           return false;
@@ -769,9 +771,9 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
 
         const bal = balancesRef.current[from] || 0;
         const requiredReserve = from === "USDT" ? SAFE_RESERVE : 0;
-        
+
         if (bal - requiredReserve < amount) {
-          toast.error(from === "USDT" 
+          toast.error(from === "USDT"
             ? `Action Blocked: Minimal Reserve Protection ($${SAFE_RESERVE}) Active.`
             : `Insufficient ${from} balance`
           );
@@ -781,7 +783,7 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
         const usdtValue = amount * fromPrice;
         const targetAmount = usdtValue / toPrice;
         const feeRate = (botSettingsRef.current.feeRecovery || 0.2) / 200;
-        const fee = targetAmount * feeRate; 
+        const fee = targetAmount * feeRate;
         const finalAmount = targetAmount - fee;
 
         const setBalFn = isLiveMode ? setLiveBalances : setPaperBalances;
@@ -793,7 +795,7 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
 
         // ── POSITION TRACKING ──
         const mode = isLiveMode ? "LIVE" : "PAPER";
-        
+
         // 1. Source Side: If it was a coin, reduce/remove from positions
         if (from !== "USDT") {
           const sellAmount = amount;
@@ -802,30 +804,30 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
 
           // Record for Execution Log (ALWAYS log conversions)
           const exLog: ExecutedTrade = {
-             id: "ex-" + Math.random().toString(36).slice(2, 10),
-             time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-             coin: from, action: "SELL", amount: sellAmount.toString(), price: price.toString(), totalUSDT: returned.toString()
+            id: "ex-" + Math.random().toString(36).slice(2, 10),
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+            coin: from, action: "SELL", amount: sellAmount.toString(), price: price.toString(), totalUSDT: returned.toString()
           };
           setTradeHistory(prev => [exLog, ...prev]);
           await fetch("/api/trades", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...exLog, mode, strategy: "MANUAL_CONVERSION" }) }).catch(console.error);
 
           const existing = openPositionsRef.current.find(p => p.coin === from);
-          
+
           // History Tracking
           const feeRate = (botSettingsRef.current.feeRecovery || 0.2) / 200;
           const sellFee = returned * feeRate;
 
           const completed: CompletedTrade = {
             id: "ct-" + Math.random().toString(36).slice(2, 10),
-            coin: from, 
-            entryTime: existing?.entryTime || new Date().toISOString(), 
+            coin: from,
+            entryTime: existing?.entryTime || new Date().toISOString(),
             exitTime: new Date().toISOString(),
-            entryPrice: existing?.entryPrice || price, 
-            exitPrice: price, 
+            entryPrice: existing?.entryPrice || price,
+            exitPrice: price,
             amount: sellAmount,
             invested: existing ? (sellAmount / existing.amount) * existing.invested : returned,
-            returned, 
-            fee: sellFee, 
+            returned,
+            fee: sellFee,
             profit: 0, // Fallback if no position
             netProfit: 0, // Fallback if no position
             profitPct: 0, // Fallback if no position
