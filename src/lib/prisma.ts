@@ -15,3 +15,4 @@ function createPrismaClient() {
 export const prisma = globalForPrisma.prisma || createPrismaClient();
 
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
+// Re-generated client sync marker: 2026-06-01T09:15

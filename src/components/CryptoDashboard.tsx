@@ -470,10 +470,10 @@ export default function CryptoDashboard() {
 
                       <div className="flex gap-1 flex-1 justify-end opacity-40 group-hover:opacity-100 transition-opacity">
                         <button
-                          onClick={() => executeTrade("BUY", coin, Math.min(availableUsdt, 1))}
+                          onClick={() => executeTrade("BUY", coin, 11.0)}
                           className="px-2 py-0.5 rounded bg-white/5 border border-white/10 text-[8px] font-black uppercase text-white/40 hover:bg-emerald-500 hover:text-black transition-all"
                         >
-                          Buy $1
+                          Buy $11
                         </button>
                         <button
                           onClick={() => executeTrade("SELL", coin, value)}

@@ -82,7 +82,7 @@ export default function SettingsPage() {
                 </div>
                 <input 
                   type="range" min="0.1" max="5" step="0.1" 
-                  value={localSettings.netTarget}
+                  value={localSettings.netTarget ?? 0.5}
                   onChange={(e) => setLocalSettings({...localSettings, netTarget: parseFloat(e.target.value)})}
                   className="w-full h-2 bg-white/5 rounded-full appearance-none cursor-pointer accent-emerald-500 hover:bg-white/10 transition-colors"
                 />
@@ -100,7 +100,7 @@ export default function SettingsPage() {
                 </div>
                 <input 
                   type="range" min="0.1" max="1" step="0.05" 
-                  value={localSettings.feeRecovery}
+                  value={localSettings.feeRecovery ?? 0.2}
                   onChange={(e) => setLocalSettings({...localSettings, feeRecovery: parseFloat(e.target.value)})}
                   className="w-full h-2 bg-white/5 rounded-full appearance-none cursor-pointer accent-indigo-500 hover:bg-white/10 transition-colors"
                 />
@@ -137,7 +137,7 @@ export default function SettingsPage() {
                 </div>
                 <input 
                   type="range" min="-10" max="-0.5" step="0.5" 
-                  value={localSettings.stopLoss}
+                  value={localSettings.stopLoss ?? -1.5}
                   onChange={(e) => setLocalSettings({...localSettings, stopLoss: parseFloat(e.target.value)})}
                   className="w-full h-2 bg-white/5 rounded-full appearance-none cursor-pointer accent-red-500 hover:bg-white/10 transition-colors"
                 />
@@ -155,7 +155,7 @@ export default function SettingsPage() {
                 </div>
                 <input 
                   type="range" min="1" max="50" step="1" 
-                  value={localSettings.allocationPct}
+                  value={localSettings.allocationPct ?? 10}
                   onChange={(e) => setLocalSettings({...localSettings, allocationPct: parseFloat(e.target.value)})}
                   className="w-full h-2 bg-white/5 rounded-full appearance-none cursor-pointer accent-amber-500 hover:bg-white/10 transition-colors"
                 />
@@ -173,10 +173,39 @@ export default function SettingsPage() {
                 </div>
                 <input 
                   type="range" min="1" max="15" step="1" 
-                  value={localSettings.maxOpenPositions}
+                  value={localSettings.maxOpenPositions ?? 5}
                   onChange={(e) => setLocalSettings({...localSettings, maxOpenPositions: parseInt(e.target.value)})}
                   className="w-full h-2 bg-white/5 rounded-full appearance-none cursor-pointer accent-indigo-500 hover:bg-white/10 transition-colors"
                 />
+              </div>
+
+              <div className="space-y-4 pt-4 border-t border-white/5">
+                <div className="flex justify-between items-end">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[11px] font-black text-white/40 uppercase tracking-widest">Bot Runtime Duration</label>
+                    <p className="text-[13px] text-white/60 leading-relaxed max-w-[280px]">
+                      Set how long the bot should run in the background (Hours). 0 means it runs indefinitely until manually stopped. Max 30 days.
+                    </p>
+                  </div>
+                  <span className="text-3xl font-mono font-black text-indigo-400 drop-shadow-[0_0_15px_rgba(99,102,241,0.3)]">
+                    {localSettings.runTimer === 0 
+                      ? "∞" 
+                      : localSettings.runTimer < 24 
+                        ? `${localSettings.runTimer}h` 
+                        : `${(localSettings.runTimer / 24).toFixed(1)}d`}
+                  </span>
+                </div>
+                <input 
+                  type="range" min="0" max="720" step="1" 
+                  value={localSettings.runTimer ?? 0}
+                  onChange={(e) => setLocalSettings({...localSettings, runTimer: parseInt(e.target.value)})}
+                  className="w-full h-2 bg-white/5 rounded-full appearance-none cursor-pointer accent-indigo-500 hover:bg-white/10 transition-colors"
+                />
+                <div className="flex justify-between text-[8px] font-black text-white/20 uppercase tracking-widest">
+                  <span>Indefinite</span>
+                  <span>15 Days</span>
+                  <span>30 Days</span>
+                </div>
               </div>
             </div>
           </m.div>

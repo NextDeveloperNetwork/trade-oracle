@@ -84,6 +84,7 @@ export default function HoldingsTable() {
               <th className="px-4 py-5 text-[9px] font-black uppercase tracking-[0.2em] text-center">Live V.</th>
               <th className="px-4 py-5 text-[9px] font-black uppercase tracking-[0.2em] text-center">Fee</th>
               <th className="px-4 py-5 text-[9px] font-black uppercase tracking-[0.2em] text-center">Exit Target</th>
+              <th className="px-4 py-5 text-[9px] font-black uppercase tracking-[0.2em] text-center">Stop Loss</th>
               <th className="px-4 py-5 text-[9px] font-black uppercase tracking-[0.2em] text-center">Target P&L</th>
               <th className="px-4 py-5 text-[9px] font-black uppercase tracking-[0.2em] text-center">ROI %</th>
               <th className="px-4 py-5 text-[9px] font-black uppercase tracking-[0.2em] text-right">P&L Value</th>
@@ -207,6 +208,24 @@ export default function HoldingsTable() {
                               ${targetPrice.toLocaleString('en-US', { minimumFractionDigits: getDecimals(asset) })}
                             </span>
                             <span className="text-[7px] text-white/20 uppercase font-black tracking-tighter">Min Exit Price</span>
+                          </div>
+                        );
+                      })()
+                    ) : <span className="text-white/5">—</span>}
+                  </td>
+
+                  {/* Stop Loss */}
+                  <td className="px-4 py-5 text-center">
+                    {asset !== "USDT" && totalInvested > 0 && amount > 0 ? (
+                      (() => {
+                        const slPrice = avgEntry * (1 + (botSettings.stopLoss || -1.5) / 100);
+                        const isBreached = currentPrice <= slPrice;
+                        return (
+                          <div className="flex flex-col items-center">
+                            <span className={`text-[13px] font-black font-mono tracking-tighter ${isBreached ? 'text-red-500' : 'text-red-400/50'}`}>
+                              ${slPrice.toLocaleString('en-US', { minimumFractionDigits: getDecimals(asset) })}
+                            </span>
+                            <span className="text-[7px] text-white/20 uppercase font-black tracking-tighter">Exit Trigger</span>
                           </div>
                         );
                       })()

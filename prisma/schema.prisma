@@ -32,7 +32,6 @@ model Position {
   @@unique([coin, mode])
 }
 
-
 model CompletedTrade {
   id         String   @id @default(cuid())
   coin       String
@@ -59,11 +58,20 @@ model BalanceSnapshot {
 }
 
 model UserConfig {
-  id               String @id @default("oracle_config")
-  feeRecovery      Float  @default(0.2)
-  netTarget        Float  @default(0.5)
-  stopLoss         Float  @default(-1.5)
-  allocationPct    Float  @default(10.0)
-  maxOpenPositions Int    @default(5)
-  activeCoins      String[] @default(["BTC", "ETH", "XRP"])
+  id                 String    @id @default("oracle_config")
+  feeRecovery        Float     @default(0.2)
+  netTarget          Float     @default(0.5)
+  stopLoss           Float     @default(-1.5)
+  allocationPct      Float     @default(10.0)
+  maxOpenPositions   Int       @default(5)
+  activeCoins        String[]  @default(["BTC", "ETH", "XRP"])
+  autoTradeStartedAt DateTime?
+  isAutoTrading      Boolean   @default(false)
+  isLiveMode         Boolean   @default(false)
+  runTimer           Int       @default(0)
+}
+
+model PaperBalance {
+  asset  String @id
+  amount Float  @default(0)
 }

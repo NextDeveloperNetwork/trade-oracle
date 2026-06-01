@@ -210,7 +210,13 @@ export async function POST(req: Request) {
     const data = await response.json();
 
     if (!response.ok) {
-      console.error("Binance Order Error:", { status: response.status, data });
+      console.error("Binance Order Error:", { 
+        status: response.status, 
+        data, 
+        request: { symbol: pair, side, quantity, usdtAmount, queryString } 
+      });
+    } else {
+      console.log("Binance Order Success:", { symbol: pair, side, data });
     }
 
     return NextResponse.json(data);

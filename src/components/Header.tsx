@@ -16,6 +16,8 @@ export default function Header() {
     currentStrategy, setStrategy,
     syncBalances,
     setUSDTBalance,
+    botSettings,
+    autoTradeStartedAt,
   } = useTradingEngine();
 
   const [isMounted, setIsMounted] = useState(false);
@@ -196,18 +198,31 @@ export default function Header() {
             )}
           </div>
 
-          {/* Bot Toggle */}
-          <button
-            onClick={toggleAutoTrading}
-            className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition-all text-[11px] font-bold font-mono ${
-              isAutoTrading
-                ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-300 shadow-[0_0_20px_rgba(16,185,129,0.15)]"
-                : "bg-white/5 border-white/10 text-white/40 hover:bg-white/10 hover:text-white/70"
-            }`}
-          >
-            <Zap size={13} fill={isAutoTrading ? "currentColor" : "none"} />
-            <span>{isAutoTrading ? "BOT ON" : "BOT OFF"}</span>
-          </button>
+          {/* Bot Toggle & Timer */}
+          <div className="flex flex-col items-end gap-1">
+            <button
+              onClick={toggleAutoTrading}
+              className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition-all text-[11px] font-bold font-mono ${
+                isAutoTrading
+                  ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-300 shadow-[0_0_20px_rgba(16,185,129,0.15)]"
+                  : "bg-white/5 border-white/10 text-white/40 hover:bg-white/10 hover:text-white/70"
+              }`}
+            >
+              <Zap size={13} fill={isAutoTrading ? "currentColor" : "none"} />
+              <span>{isAutoTrading ? "BOT ON" : "BOT OFF"}</span>
+            </button>
+            <AP>
+              {isAutoTrading && botSettings.runTimer > 0 && autoTradeStartedAt && (
+                <m.div 
+                  initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                  className="text-[9px] font-mono font-black text-white/40 flex items-center gap-1.5"
+                >
+                  <Activity size={8} className="text-emerald-500/50" />
+                  <Countdown startTime={autoTradeStartedAt} hours={botSettings.runTimer} />
+                </m.div>
+              )}
+            </AP>
+          </div>
 
           {/* Live/Paper Toggle */}
           <button
@@ -301,4 +316,41 @@ export default function Header() {
       </div>
     </nav>
   );
+}
+
+function Countdown({ startTime, hours }: { startTime: string; hours: number }) {
+  const [timeLeft, setTimeLeft] = useState("");
+
+  useEffect(() => {
+    const target = new Date(startTime).getTime() + hours * 60 * 60 * 1000;
+    
+    const update = () => {
+      const now = Date.now();
+      const diff = target - now;
+      
+      if (diff <= 0) {
+        setTimeLeft("EXPIRED");
+        return;
+      }
+
+      const d = Math.floor(diff / (1000 * 60 * 60 * 24));
+      const h = Math.floor((diff / (1000 * 60 * 60)) % 24);
+      const m = Math.floor((diff / (1000 * 60)) % 60);
+      const s = Math.floor((diff / 1000) % 60);
+
+      const parts = [];
+      if (d > 0) parts.push(`${d}d`);
+      if (h > 0 || d > 0) parts.push(`${h}h`);
+      parts.push(`${m}m`);
+      parts.push(`${s}s`);
+      
+      setTimeLeft(parts.join(" "));
+    };
+
+    update();
+    const id = setInterval(update, 1000);
+    return () => clearInterval(id);
+  }, [startTime, hours]);
+
+  return <span>{timeLeft}</span>;
 }

@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from "react";
 import { toast } from "sonner";
+import { rsi, calculateMinimumExitPrice } from "@/lib/indicators";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -19,6 +20,7 @@ export type BotSettings = {
   allocationPct: number;
   maxOpenPositions: number;
   activeCoins?: string[];
+  runTimer: number; // minutes
 };
 
 type CompletedTrade = {
@@ -96,52 +98,14 @@ type TradingContextType = {
   convertFromAsset: string;
   setConvertFromAsset: (a: string) => void;
   notifications: any[];
+  autoTradeStartedAt: string | null;
 };
 
 const DEFAULT_COINS = ["BTC", "ETH", "XRP"];
-export const SAFE_RESERVE = 11;
+export const SAFE_RESERVE = 0;
 export const MAX_OPEN_POSITIONS = 5;
-const MAX_TRADE_USD = 1.00;
+const MAX_TRADE_USD = 11.0;
 const ORACLE_AUTH_TOKEN = "oracle_default_secret_9988";
-
-const rsi = (prices: number[], period = 14): number => {
-  if (prices.length < period + 1) return 50;
-  let avgGain = 0, avgLoss = 0;
-  for (let i = 1; i <= period; i++) {
-    const d = prices[i] - prices[i - 1];
-    if (d > 0) avgGain += d; else avgLoss -= d;
-  }
-  avgGain /= period; avgLoss /= period;
-  for (let i = period + 1; i < prices.length; i++) {
-    const d = prices[i] - prices[i - 1];
-    avgGain = (avgGain * (period - 1) + (d > 0 ? d : 0)) / period;
-    avgLoss = (avgLoss * (period - 1) + (d < 0 ? -d : 0)) / period;
-  }
-  return avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss);
-};
-const calculateATR = (candles: Candle[], period = 14) => {
-  if (candles.length < period + 1) return 0;
-  let trSum = 0;
-  for (let i = 1; i <= period; i++) {
-    const c = candles[i], p = candles[i - 1];
-    trSum += Math.max(c.h - c.l, Math.abs(c.h - p.c), Math.abs(c.l - p.c));
-  }
-  return trSum / period;
-};
-
-/**
- * Calculates the exact exit price required to clear entry/exit fees 
- * and secure the desired net profit percentage.
- */
-const calculateMinimumExitPrice = (
-  invested: number,
-  amount: number,
-  feeRate: number, // decimal per side, e.g. 0.001
-  netTargetPct: number // %
-): number => {
-  const targetUSDT = invested * (1 + netTargetPct / 100);
-  return targetUSDT / (amount * (1 - feeRate));
-};
 
 const TradingContext = createContext<TradingContextType | undefined>(undefined);
 
@@ -166,7 +130,7 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
   const [totalProfit, setTotalProfit] = useState(0);
   const [totalUSDT, setTotalUSDT] = useState(0);
   const [botSettings, setBotSettings] = useState<BotSettings>({
-    feeRecovery: 0.2, netTarget: 0.5, stopLoss: -1.5, allocationPct: 10, maxOpenPositions: 5
+    feeRecovery: 0.2, netTarget: 0.5, stopLoss: -1.5, allocationPct: 10, maxOpenPositions: 5, runTimer: 0
   });
 
   // 2. Refs
@@ -214,10 +178,7 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
     if (isStale && totalUSDT > 0) return;
     setTotalUSDT(total);
     
-    if (!isLiveMode) {
-      localStorage.setItem("paperBalances", JSON.stringify(balances));
-      localStorage.setItem("paperInitial", paperInitial.toString());
-    }
+    // Cloud sync handled in specific setters and hydration
 
     // ── FINANCIAL TELEMETRY HUB ──
     // Total Profit = (All Realized Gains from History) + (Current Unrealized Gains)
@@ -235,7 +196,9 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
     if (!isNaN(calculatedProfit)) {
       setTotalProfit(calculatedProfit);
     }
-  }, [balances, marketData, isLiveMode, paperInitial, calculateTotalUSDT, completedTrades, openPositions]);
+  }, [balances, marketData, isLiveMode, calculateTotalUSDT, completedTrades, openPositions, botSettings.feeRecovery]);
+
+  const [autoTradeStartedAt, setAutoTradeStartedAt] = useState<string | null>(null);
 
 
   // 5. Data Fetchers
@@ -271,10 +234,12 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const hydrate = async () => {
-      const savedPaperBal = localStorage.getItem("paperBalances");
-      if (savedPaperBal) setPaperBalances(JSON.parse(savedPaperBal));
-      const savedPaperInit = localStorage.getItem("paperInitial");
-      if (savedPaperInit) setPaperInitial(parseFloat(savedPaperInit));
+      // Fetch Staging Balances from Cloud
+      const pbRes = await fetch("/api/paper-balance");
+      if (pbRes.ok) {
+        const pb = await pbRes.json();
+        setPaperBalances(pb);
+      }
 
       const mode = isLiveMode ? "LIVE" : "PAPER";
       let coinsToLoad = activeCoins;
@@ -296,6 +261,8 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
               setActiveCoins(d.activeCoins);
               coinsToLoad = d.activeCoins;
             }
+            if (d.isAutoTrading) setIsAutoTrading(true);
+            if (d.autoTradeStartedAt) setAutoTradeStartedAt(d.autoTradeStartedAt);
           }
         }
       } catch (e) { console.warn("Hydration failed", e); }
@@ -410,7 +377,7 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
         });
         setLiveBalances(nb);
         balancesRef.current = nb;
-        toast.success("Live balances synchronized");
+        toast.success(`Live sync: $${nb.USDT?.toFixed(2)} USDT available`);
       }
     } catch (e) {
       console.error("Sync failed", e);
@@ -441,24 +408,35 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
         const available = balancesRef.current.USDT || 0;
         const safeAvailable = Math.max(0, available - SAFE_RESERVE);
         if (safeAvailable < usdtAmount) {
-          toast.error(`Action Blocked: Minimal Reserve Protection ($${SAFE_RESERVE}) Active.`);
+          toast.error(`Action Blocked: Minimal Reserve Protection ($${SAFE_RESERVE}) Active. Total balance must exceed requested trade + reserve.`);
           isTradeLockRef.current = false;
           return false;
+        }
+
+        if (isLiveMode && usdtAmount < 10) {
+          toast.warning(`Warning: Trade amount $${usdtAmount} may be below Binance minimum ($10).`);
         }
 
         // ── LIVE EXECUTION ──
         if (isLiveMode) {
           try {
+            if (usdtAmount < 10) {
+              toast.error(`Order Rejected: Binance minimum is $10.0. Current trade: $${usdtAmount.toFixed(2)}`);
+              isTradeLockRef.current = false;
+              return false;
+            }
+
             const res = await fetch("/api/binance", {
               method: "POST",
               headers: { "Content-Type": "application/json", "x-oracle-token": ORACLE_AUTH_TOKEN },
-              body: JSON.stringify({ symbol: coin, side: "BUY", usdtAmount })
+              body: JSON.stringify({ symbol: coin, side: "BUY", usdtAmount: parseFloat(usdtAmount.toFixed(2)) })
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || "Binance Execution Error");
             toast.success(`Live Order Placed: Buy ${coin} @ $${price.toFixed(2)}`);
           } catch (err: any) {
             toast.error(`LIVE BUY FAILED: ${err.message}`);
+            isTradeLockRef.current = false;
             return false;
           }
         }
@@ -470,6 +448,13 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
         
         const setBalFn = isLiveMode ? setLiveBalances : setPaperBalances;
         setBalFn(prev => ({ ...prev, USDT: (prev.USDT || 0) - usdtAmount, [coin]: (prev[coin] || 0) + amount }));
+        
+        if (!isLiveMode) {
+           // Sync Paper Balances
+           fetch("/api/paper-balance", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ asset: "USDT", amount: (balancesRef.current.USDT || 0) - usdtAmount }) }).catch(console.error);
+           fetch("/api/paper-balance", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ asset: coin, amount: (balancesRef.current[coin] || 0) + amount }) }).catch(console.error);
+        }
+
         const newPos = { coin, entryTime: new Date().toISOString(), entryPrice: price, amount, invested: usdtAmount, strategy: strategyRef.current };
         setOpenPositions(prev => [...prev, newPos]);
 
@@ -499,9 +484,10 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
         const pos = posIdx !== -1 ? openPositionsRef.current[posIdx] : null;
         
         // Dynamic amount determination: if position exists use pos.amount, else use full wallet balance
-        const sellAmount = pos ? pos.amount : (balancesRef.current[coin] || 0);
+        // Round to 6 decimals to safely clear Binance stepSize filters for most pairs
+        const sellAmount = parseFloat((pos ? pos.amount : (balancesRef.current[coin] || 0)).toFixed(6));
 
-        if (sellAmount <= 0) {
+        if (sellAmount <= 0.000001) {
           toast.error(`Trade failed: No ${coin} balance or position found to sell.`);
           return false;
         }
@@ -514,7 +500,7 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
             const res = await fetch("/api/binance", {
               method: "POST",
               headers: { "Content-Type": "application/json", "x-oracle-token": ORACLE_AUTH_TOKEN },
-              body: JSON.stringify({ symbol: coin, side: "SELL", quantity: sellAmount })
+              body: JSON.stringify({ symbol: coin, side: "SELL", quantity: parseFloat(sellAmount.toFixed(8)) })
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || "Binance Execution Error");
@@ -583,16 +569,37 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
   const resetAll = useCallback(async () => {
     const mode = isLiveMode ? "LIVE" : "PAPER";
     try {
+      // 1. Wipe all trade history, positions, completed trades from DB
       await fetch(`/api/reset?mode=${mode}`, { method: "POST" });
+
+      // 2. Reset ALL paper balances in DB to just 10000 USDT
+      //    First zero out existing assets by setting them to 0
+      const balances = Object.keys(paperBalances);
+      await Promise.all(
+        balances.filter(a => a !== "USDT").map(asset =>
+          fetch(`/api/paper-balance`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ asset, amount: 0 }),
+          })
+        )
+      );
+      // Reset USDT back to 10000
+      await fetch(`/api/paper-balance`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ asset: "USDT", amount: 10000 }),
+      });
     } catch (e) { console.error("Purge Error:", e); }
 
+    // 3. Clear local state
     setPaperBalances({ USDT: 10000 });
     setPaperInitial(10000);
     setOpenPositions([]);
     setCompletedTrades([]);
     localStorage.clear();
     location.reload();
-  }, [isLiveMode]);
+  }, [isLiveMode, paperBalances]);
 
   const executeTradeRef = useRef(executeTrade);
   useEffect(() => { executeTradeRef.current = executeTrade; }, [executeTrade]);
@@ -638,7 +645,7 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
               tradeExecutedThisTick = true;
               const available = Math.max(0, (balancesRef.current.USDT || 0) - SAFE_RESERVE);
               const allocation = available * (botSettingsRef.current.allocationPct / 100);
-              const tradeSize = Math.max(1.0, allocation);
+              const tradeSize = Math.max(MAX_TRADE_USD, allocation);
               executeTradeRef.current("BUY", coin, tradeSize).catch(err => console.error("Buy err", err));
             }
           }
@@ -682,10 +689,42 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <TradingContext.Provider value={{
-      isLiveMode, toggleLiveMode: () => setIsLiveMode(prev => !prev),
-      isAutoTrading, toggleAutoTrading: () => setIsAutoTrading(!isAutoTrading),
+      isLiveMode, toggleLiveMode: async () => {
+        const nextMode = !isLiveMode;
+        setIsLiveMode(nextMode);
+        
+        // Cloud Sync Mode
+        await fetch("/api/config", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ isLiveMode: nextMode })
+        }).catch(console.error);
+      },
+      isAutoTrading,
+      toggleAutoTrading: async () => {
+        const nextState = !isAutoTrading;
+        setIsAutoTrading(nextState);
+        const startTime = nextState ? new Date().toISOString() : null;
+        setAutoTradeStartedAt(startTime);
+        toast.success(`Autonomous Trading ${nextState ? 'ENGAGED' : 'PAUSED'}`);
+        
+        // Cloud Sync Bot Status
+        await fetch("/api/config", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ isAutoTrading: nextState })
+        }).catch(console.error);
+      },
       currentStrategy, setStrategy,
-      balances, setUSDTBalance: (a) => { setPaperBalances(p => ({ ...p, USDT: a })); setPaperInitial(a); },
+      balances, setUSDTBalance: async (a) => { 
+        setPaperBalances(p => ({ ...p, USDT: a })); 
+        setPaperInitial(a); 
+        await fetch("/api/paper-balance", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ asset: "USDT", amount: a })
+        }).catch(console.error);
+      },
       executeTrade, marketData, activeCoins,
       addCoin: (c) => {
         setActiveCoins(p => {
@@ -717,6 +756,7 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
       resetAll, resetPnL: () => setPaperInitial(totalUSDT),
       selectedCoin, setSelectedCoin,
       syncBalances,
+      autoTradeStartedAt,
       executeTriangulation: async (from: string, to: string, amount: number) => {
         if (from === to) return false;
         const fromPrice = from === "USDT" ? 1 : (marketDataRef.current[from]?.price || 0);
