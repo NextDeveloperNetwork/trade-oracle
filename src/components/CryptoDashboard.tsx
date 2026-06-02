@@ -195,11 +195,11 @@ export default function CryptoDashboard() {
       <div className="px-6 sm:px-8 lg:px-12 py-5 space-y-8">
 
         {/* ROW 1: Swap + Holdings Table */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          <div className="lg:col-span-4 h-[480px]">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          <div className="lg:col-span-3 h-[360px]">
             <TriangulationTool />
           </div>
-          <div className="lg:col-span-8 h-[480px]">
+          <div className="lg:col-span-9 h-[520px]">
             <HoldingsTable />
           </div>
         </div>
