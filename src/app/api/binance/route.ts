@@ -193,9 +193,12 @@ export async function POST(req: Request) {
 
     let queryString = `symbol=${pair}&side=${side.toUpperCase()}&type=MARKET&timestamp=${timestamp}&recvWindow=5000`;
     if (side.toUpperCase() === "BUY" && usdtAmount) {
-      queryString += `&quoteOrderQty=${usdtAmount}`;
-    } else {
-      queryString += `&quantity=${quantity}`;
+      // Use fixed format to avoid scientific notation (Binance requires decimals or integers)
+      queryString += `&quoteOrderQty=${parseFloat(usdtAmount.toString()).toFixed(2)}`;
+    } else if (quantity) {
+      // Format quantity as string with up to 8 decimals, stripping trailing zeros
+      const formattedQty = parseFloat(quantity.toString()).toFixed(8).replace(/\.?0+$/, "");
+      queryString += `&quantity=${formattedQty}`;
     }
 
     const signature = generateSignature(queryString, SECRET_KEY);
@@ -215,13 +218,13 @@ export async function POST(req: Request) {
         data, 
         request: { symbol: pair, side, quantity, usdtAmount, queryString } 
       });
+      return NextResponse.json(data, { status: response.status });
     } else {
       console.log("Binance Order Success:", { symbol: pair, side, data });
+      return NextResponse.json(data);
     }
-
-    return NextResponse.json(data);
   } catch (error: any) {
     console.error("Route POST error:", error.message);
-    return NextResponse.json({ error: "Failed to place order" }, { status: 500 });
+    return NextResponse.json({ error: error.message || "Failed to place order" }, { status: 500 });
   }
 }

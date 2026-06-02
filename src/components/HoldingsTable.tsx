@@ -11,8 +11,10 @@ const getDecimals = (symbol: string) => {
 };
 
 export default function HoldingsTable() {
-  const { balances, marketData, setConvertFromAsset, executeTrade, openPositions, removeCoin, botSettings } = useTradingEngine();
+  const { balances, marketData, setConvertFromAsset, executeTrade, openPositions, removeCoin, botSettings, updatePositionPrice } = useTradingEngine();
   const [isMounted, setIsMounted] = React.useState(false);
+  const [editingCoin, setEditingCoin] = React.useState<string | null>(null);
+  const [editPrice, setEditPrice] = React.useState("");
 
   React.useEffect(() => {
     setIsMounted(true);
@@ -155,16 +157,55 @@ export default function HoldingsTable() {
                     </div>
                   </td>
 
-                  {/* Entry Value */}
                   <td className="px-4 py-5 text-center">
-                    {asset !== "USDT" && totalInvested > 0 ? (
+                    {asset !== "USDT" ? (
                       <div className="flex flex-col items-center">
-                        <span className="text-[13px] font-black text-white/90 font-mono tracking-tighter">
-                          @{avgEntry.toLocaleString('en-US', { minimumFractionDigits: getDecimals(asset) })}
-                        </span>
-                        <span className="text-[10px] text-white/30 uppercase font-black tracking-tighter">
-                          ${totalInvested.toFixed(2)}
-                        </span>
+                        {editingCoin === asset ? (
+                          <div className="flex items-center gap-1">
+                            <input 
+                              autoFocus
+                              type="number"
+                              className="w-20 bg-white/5 border border-white/10 rounded px-1.5 py-0.5 text-[11px] font-mono outline-none focus:border-indigo-500"
+                              value={editPrice}
+                              onChange={(e) => setEditPrice(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  const p = parseFloat(editPrice);
+                                  if (!isNaN(p)) updatePositionPrice(asset, p);
+                                  setEditingCoin(null);
+                                }
+                                if (e.key === 'Escape') setEditingCoin(null);
+                              }}
+                              onBlur={() => {
+                                const p = parseFloat(editPrice);
+                                if (!isNaN(p)) updatePositionPrice(asset, p);
+                                setEditingCoin(null);
+                              }}
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          </div>
+                        ) : (
+                          <div 
+                            className="cursor-pointer hover:bg-white/5 px-2 py-1 rounded transition-all flex flex-col items-center"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingCoin(asset);
+                              setEditPrice(avgEntry > 0 ? avgEntry.toString() : "");
+                            }}
+                            title="Click to set entry price manually"
+                          >
+                            <span className={`text-[13px] font-black font-mono tracking-tighter ${avgEntry > 0 ? 'text-white/90' : 'text-amber-500/50 italic animate-pulse'}`}>
+                              {avgEntry > 0 
+                                ? `@${avgEntry.toLocaleString('en-US', { minimumFractionDigits: getDecimals(asset) })}` 
+                                : "Set Entry"}
+                            </span>
+                            {totalInvested > 0 && (
+                              <span className="text-[10px] text-white/30 uppercase font-black tracking-tighter">
+                                ${totalInvested.toFixed(2)}
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
                     ) : <span className="text-white/5">—</span>}
                   </td>

@@ -81,7 +81,7 @@ export default function SettingsPage() {
                   <span className="text-3xl font-mono font-black text-emerald-400 drop-shadow-[0_0_15px_rgba(52,211,153,0.3)]">{localSettings.netTarget}%</span>
                 </div>
                 <input 
-                  type="range" min="0.1" max="5" step="0.1" 
+                  type="range" min="0.1" max="10" step="0.1" 
                   value={localSettings.netTarget ?? 0.5}
                   onChange={(e) => setLocalSettings({...localSettings, netTarget: parseFloat(e.target.value)})}
                   className="w-full h-2 bg-white/5 rounded-full appearance-none cursor-pointer accent-emerald-500 hover:bg-white/10 transition-colors"
@@ -154,7 +154,7 @@ export default function SettingsPage() {
                   <span className="text-3xl font-mono font-black text-amber-500 drop-shadow-[0_0_15px_rgba(245,158,11,0.3)]">{localSettings.allocationPct}%</span>
                 </div>
                 <input 
-                  type="range" min="1" max="50" step="1" 
+                  type="range" min="1" max="99" step="1" 
                   value={localSettings.allocationPct ?? 10}
                   onChange={(e) => setLocalSettings({...localSettings, allocationPct: parseFloat(e.target.value)})}
                   className="w-full h-2 bg-white/5 rounded-full appearance-none cursor-pointer accent-amber-500 hover:bg-white/10 transition-colors"

@@ -7,7 +7,7 @@ import { rsi, calculateMinimumExitPrice } from "@/lib/indicators";
 // ─── Types ──────────────────────────────────────────────────────────────────
 
 type SignalType = "BUY" | "SELL" | "HOLD" | "INFO";
-export type BotStrategy = "EMA_SCALPER" | "TREND_FOLLOWER" | "VWAP_TRADER" | "MEAN_REVERSION" | "BREAKOUT_HUNTER" | "RSI_MOMENTUM" | "SWING_TRADER" | "AGGRESSIVE" | "HYPER_SCALPER" | "SNIPER" | "ORACLE_ELITE" | "MANUAL_CONVERSION";
+export type BotStrategy = "EMA_SCALPER" | "TREND_FOLLOWER" | "VWAP_TRADER" | "MEAN_REVERSION" | "BREAKOUT_HUNTER" | "RSI_MOMENTUM" | "SWING_TRADER" | "AGGRESSIVE" | "HYPER_SCALPER" | "SNIPER" | "ORACLE_ELITE" | "MANUAL_CONVERSION" | "MANUAL_ENTRY";
 export type Candle = { o: number; h: number; l: number; c: number; v: number; t: number };
 
 type TradeLog = { id: string; time: string; coin: string; price: string; signal: SignalType; reason?: string };
@@ -62,6 +62,12 @@ type LiveCoinState = {
   atr?: number;
   volume?: number;
   isReady?: boolean;
+  filters?: {
+    stepSize: string;
+    tickSize: string;
+    minQty: string;
+    minNotional: string;
+  };
 };
 
 type Portfolio = Record<string, number>;
@@ -99,6 +105,7 @@ type TradingContextType = {
   setConvertFromAsset: (a: string) => void;
   notifications: any[];
   autoTradeStartedAt: string | null;
+  updatePositionPrice: (coin: string, price: number) => Promise<void>;
 };
 
 const DEFAULT_COINS = ["BTC", "ETH", "XRP"];
@@ -180,7 +187,6 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
 
     // Cloud sync handled in specific setters and hydration
 
-    // ── FINANCIAL TELEMETRY HUB ──
     // Total Profit = (All Realized Gains from History) + (Current Unrealized Gains)
     const activeFeeRate = (botSettings.feeRecovery || 0.2) / 200;
     const realizedPnL = completedTrades.reduce((sum, t) => sum + (Number(t.netProfit) || 0), 0);
@@ -204,10 +210,19 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
   // 5. Data Fetchers
   const loadCandles = useCallback(async (coin: string) => {
     try {
-      const res = await fetch(`/api/binance?type=klines&symbol=${coin}USDT&interval=1m&limit=50`, {
-        headers: { "x-oracle-token": ORACLE_AUTH_TOKEN }
-      });
-      const data = await res.json();
+      const [candleRes, marketsRes] = await Promise.all([
+        fetch(`/api/binance?type=klines&symbol=${coin}USDT&interval=1m&limit=50`, {
+          headers: { "x-oracle-token": ORACLE_AUTH_TOKEN }
+        }),
+        fetch(`/api/binance?type=exchangeInfo`, {
+          headers: { "x-oracle-token": ORACLE_AUTH_TOKEN }
+        })
+      ]);
+      
+      const data = await candleRes.json();
+      const allMarkets = await marketsRes.json();
+      const coinFilters = Array.isArray(allMarkets) ? allMarkets.find((m: any) => m.baseAsset === coin)?.filters : null;
+
       if (Array.isArray(data)) {
         const formatted = data.map((d: any[]) => ({
           t: d[0],
@@ -225,7 +240,8 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
             candleHistory: formatted,
             price: prev[coin]?.price || lastCandle?.c || null,
             prevPrice: prev[coin]?.prevPrice || lastCandle?.o || null,
-            isReady: true
+            isReady: true,
+            filters: coinFilters || prev[coin]?.filters
           }
         }));
       }
@@ -420,8 +436,11 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
         // ── LIVE EXECUTION ──
         if (isLiveMode) {
           try {
-            if (usdtAmount < 10) {
-              toast.error(`Order Rejected: Binance minimum is $10.0. Current trade: $${usdtAmount.toFixed(2)}`);
+            const filters = marketDataRef.current[coin]?.filters;
+            const minNotional = filters?.minNotional ? parseFloat(filters.minNotional) : 10.0;
+            
+            if (usdtAmount < minNotional) {
+              toast.error(`Order Rejected: Binance minimum for ${coin} is $${minNotional.toFixed(2)}. Current trade: $${usdtAmount.toFixed(2)}`);
               isTradeLockRef.current = false;
               return false;
             }
@@ -483,12 +502,26 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
         const posIdx = openPositionsRef.current.findIndex(p => p.coin === coin);
         const pos = posIdx !== -1 ? openPositionsRef.current[posIdx] : null;
 
-        // Dynamic amount determination: if position exists use pos.amount, else use full wallet balance
-        // Round to 6 decimals to safely clear Binance stepSize filters for most pairs
-        const sellAmount = parseFloat((pos ? pos.amount : (balancesRef.current[coin] || 0)).toFixed(6));
+        // Dynamic amount determination for manual exit
+        const filters = marketDataRef.current[coin]?.filters;
+        const stepSize = filters?.stepSize ? parseFloat(filters.stepSize) : 0.00000001;
+        const minNotional = filters?.minNotional ? parseFloat(filters.minNotional) : 10.0;
 
-        if (sellAmount <= 0.000001) {
-          toast.error(`Trade failed: No ${coin} balance or position found to sell.`);
+        // We prioritize the actual wallet balance for live trades to avoid "Insufficient Balance" errors
+        const walletBalance = balancesRef.current[coin] || 0;
+        const posAmount = pos ? pos.amount : 0;
+        
+        // Sell what's in the wallet if live, otherwise use recorded position amount
+        let rawAmount = isLiveMode ? walletBalance : (posAmount || walletBalance);
+        
+        // Precision Rounding (Very Important for Binance LOT_SIZE filter)
+        // If stepSize is 0.01, we want floor(amount / 0.01) * 0.01
+        const precision = stepSize > 0 ? Math.floor(rawAmount / stepSize) * stepSize : rawAmount;
+        const sellAmount = parseFloat(precision.toFixed(8));
+
+        if (sellAmount <= 0) {
+          toast.error(`Trade failed: No valid ${coin} quantity to sell after rounding.`);
+          isTradeLockRef.current = false;
           return false;
         }
 
@@ -497,13 +530,41 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
         // ── LIVE EXECUTION ──
         if (isLiveMode) {
           try {
+            // PROACTIVE: Binance MIN_NOTIONAL check
+            if (returned < minNotional) {
+              const shortfall = minNotional - returned + 0.1; // Add $0.1 safety
+              const confirmRecovery = confirm(`⚠️ MINIMUM NOTIONAL ERROR\n\nPosition value ($${returned.toFixed(2)}) is below Binance minimum ($${minNotional}).\n\nWould you like the bot to perform an EMERGENCY RECOVERY?\n(It will buy $${shortfall.toFixed(2)} more of ${coin} then sell everything immediately).`);
+              
+              if (confirmRecovery) {
+                toast.info("Starting Emergency Recovery...");
+                // 1. Buy the shortfall
+                const buySuccess = await executeTrade("BUY", coin, shortfall);
+                if (!buySuccess) throw new Error("Recovery step 1 (Buy) failed.");
+                
+                // 2. Immediate re-sell (full balance)
+                toast.info("Clearing expanded position...");
+                // We recursively call executeTrade SELL but now it should have enough balance
+                const doubleCheckBal = balancesRef.current[coin] || 0;
+                return await executeTrade("SELL", coin, 0); 
+              }
+              
+              isTradeLockRef.current = false;
+              return false;
+            }
             const res = await fetch("/api/binance", {
               method: "POST",
               headers: { "Content-Type": "application/json", "x-oracle-token": ORACLE_AUTH_TOKEN },
-              body: JSON.stringify({ symbol: coin, side: "SELL", quantity: parseFloat(sellAmount.toFixed(8)) })
+              body: JSON.stringify({ 
+                symbol: coin, 
+                side: "SELL", 
+                quantity: sellAmount.toString()
+              })
             });
             const data = await res.json();
-            if (!res.ok) throw new Error(data.error || "Binance Execution Error");
+            if (!res.ok) {
+              const errMsg = data.msg || data.error || "Unknown Binance Error";
+              throw new Error(errMsg);
+            }
             toast.success(`Live Order Placed: Sell ${coin} @ $${price.toFixed(2)}`);
           } catch (err: any) {
             toast.error(`LIVE SELL FAILED: ${err.message}`);
@@ -687,6 +748,62 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
     tick();
     return () => clearInterval(id);
   }, []); // Only run once on mount
+
+  const updatePositionPrice = async (coin: string, price: number) => {
+    const mode = isLiveMode ? "LIVE" : "PAPER";
+    const existingPos = openPositions.find(p => p.coin === coin);
+    const coinBalance = balancesRef.current[coin] || 0;
+    
+    // If no existing position AND no balance, we can't really set an entry for nothing
+    if (!existingPos && coinBalance <= 0) {
+      toast.error(`Cannot set entry price: No ${coin} balance found.`);
+      return;
+    }
+
+    const amount = existingPos ? existingPos.amount : coinBalance;
+    const invested = amount * price;
+    
+    const updatedPos: OpenPosition = {
+      coin,
+      entryTime: existingPos ? existingPos.entryTime : new Date().toISOString(),
+      entryPrice: price,
+      amount,
+      invested,
+      strategy: (existingPos ? existingPos.strategy : "MANUAL_ENTRY") as BotStrategy
+    };
+    
+    // Update local state
+    if (existingPos) {
+      setOpenPositions(prev => prev.map(p => p.coin === coin ? updatedPos : p));
+    } else {
+      setOpenPositions(prev => [...prev, updatedPos]);
+    }
+    
+    // Persist to DB
+    try {
+      const res = await fetch("/api/positions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...updatedPos, mode })
+      });
+      
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed to save position to database");
+      }
+      
+      toast.success(`Entry price for ${coin} established at $${price.toFixed(4)}`);
+    } catch (error: any) {
+      console.error("Manual Price Save Error:", error);
+      toast.error(`Database Sync Failed: ${error.message}`);
+      // Revert local state if DB failed
+      if (existingPos) {
+        setOpenPositions(prev => prev.map(p => p.coin === coin ? existingPos : p));
+      } else {
+        setOpenPositions(prev => prev.filter(p => p.coin !== coin));
+      }
+    }
+  };
 
   return (
     <TradingContext.Provider value={{
@@ -893,7 +1010,8 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
         return true;
       },
       convertFromAsset, setConvertFromAsset,
-      notifications: []
+      notifications: [],
+      updatePositionPrice,
     }}>
       {children}
     </TradingContext.Provider>
