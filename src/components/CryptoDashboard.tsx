@@ -140,6 +140,10 @@ export default function CryptoDashboard() {
   const [period, setPeriod] = useState<string>("ALL");
   const [signalFilter, setSignalFilter] = useState<string>("ALL");
 
+  // App Runtime Uptime Clock
+  const [uptime, setUptime] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0, totalSeconds: 0 });
+  const [startTime, setStartTime] = useState<Date | null>(null);
+
   const periods = [
     { label: "1m", ms: 60_000 }, { label: "5m", ms: 300_000 },
     { label: "1h", ms: 3_600_000 }, { label: "24h", ms: 86_400_000 },
@@ -162,9 +166,31 @@ export default function CryptoDashboard() {
 
   const periodPnL = getPeriodPnL();
 
-
   useEffect(() => {
     setIsMounted(true);
+    let start = Date.now();
+    if (typeof window !== "undefined") {
+      const stored = sessionStorage.getItem("oracle_app_launch_ts");
+      if (stored) {
+        start = parseInt(stored, 10);
+      } else {
+        sessionStorage.setItem("oracle_app_launch_ts", start.toString());
+      }
+    }
+    setStartTime(new Date(start));
+
+    const updateUptime = () => {
+      const diff = Math.max(0, Math.floor((Date.now() - start) / 1000));
+      const days = Math.floor(diff / 86400);
+      const hours = Math.floor((diff % 86400) / 3600);
+      const minutes = Math.floor((diff % 3600) / 60);
+      const seconds = diff % 60;
+      setUptime({ days, hours, minutes, seconds, totalSeconds: diff });
+    };
+
+    updateUptime();
+    const interval = setInterval(updateUptime, 1000);
+    return () => clearInterval(interval);
   }, []);
 
   const getPriceColor = (coin: string) => {
@@ -192,7 +218,56 @@ export default function CryptoDashboard() {
       <NotificationOverlay notifications={notifications} />
 
       {/* ── MAIN CONTENT GRID ────────────────────────────────────────── */}
-      <div className="px-6 sm:px-8 lg:px-12 py-5 space-y-8">
+      <div className="px-6 sm:px-8 lg:px-12 py-5 space-y-6">
+
+        {/* ── RUNTIME CLOCK & TELEMETRY STRIP ────────────────────────── */}
+        <div className="rounded-2xl border border-white/[0.06] bg-[#0d1322]/80 backdrop-blur-xl px-6 py-3.5 flex flex-wrap items-center justify-between gap-4 shadow-xl">
+          {/* Left: App Uptime Clock */}
+          <div className="flex items-center gap-6">
+            <div className="flex items-center gap-3">
+              <div className="relative flex items-center justify-center">
+                <div className={`w-2.5 h-2.5 rounded-full ${isAutoTrading ? 'bg-emerald-500 animate-ping opacity-75' : 'bg-amber-500/50'}`} />
+                <div className={`w-2 h-2 rounded-full absolute ${isAutoTrading ? 'bg-emerald-400 shadow-[0_0_10px_#10b981]' : 'bg-amber-400'}`} />
+              </div>
+              <div className="flex flex-col">
+                <span className="text-[9px] font-black text-white/30 uppercase tracking-widest">App Runtime Clock</span>
+                <div className="flex items-center gap-1.5 font-mono text-[16px] font-black text-white tracking-wider">
+                  <span className="text-white/80">{String(uptime.days).padStart(2, "0")}d</span>
+                  <span className="text-white/20">:</span>
+                  <span className="text-white/80">{String(uptime.hours).padStart(2, "0")}h</span>
+                  <span className="text-white/20">:</span>
+                  <span className="text-white/80">{String(uptime.minutes).padStart(2, "0")}m</span>
+                  <span className="text-white/20">:</span>
+                  <span className="text-emerald-400">{String(uptime.seconds).padStart(2, "0")}s</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="h-6 w-px bg-white/5 hidden sm:block" />
+
+            {/* Session Initialized */}
+            <div className="hidden sm:flex flex-col">
+              <span className="text-[9px] font-black text-white/30 uppercase tracking-widest">Session Started</span>
+              <span className="text-[12px] font-mono font-bold text-white/70 mt-0.5">
+                {startTime ? startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : 'Initializing...'}
+              </span>
+            </div>
+          </div>
+
+          {/* Right: Strategy & Automation Indicators */}
+          <div className="flex items-center gap-3 text-[11px] font-mono">
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+              <span className="text-white/30 uppercase font-black text-[9px]">Strategy:</span>
+              <span className="text-indigo-300 font-bold">{currentStrategy}</span>
+            </div>
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+              <span className="text-white/30 uppercase font-black text-[9px]">Engine:</span>
+              <span className={`font-bold ${isAutoTrading ? 'text-emerald-400' : 'text-amber-400'}`}>
+                {isAutoTrading ? 'ACTIVE' : 'STANDBY'}
+              </span>
+            </div>
+          </div>
+        </div>
 
         {/* ROW 1: Swap + Holdings Table */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
