@@ -218,7 +218,7 @@ export default function CryptoDashboard() {
       <NotificationOverlay notifications={notifications} />
 
       {/* ── MAIN CONTENT GRID ────────────────────────────────────────── */}
-      <div className="px-6 sm:px-8 lg:px-12 py-5 space-y-6">
+      <div className="px-3.5 sm:px-6 lg:px-12 py-4 sm:py-5 space-y-5 sm:space-y-6">
 
         {/* ── RUNTIME CLOCK & TELEMETRY STRIP ────────────────────────── */}
         <div className="rounded-2xl border border-white/[0.06] bg-[#0d1322]/80 backdrop-blur-xl px-6 py-3.5 flex flex-wrap items-center justify-between gap-4 shadow-xl">

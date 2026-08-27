@@ -76,8 +76,8 @@ export default function HoldingsTable() {
       </div>
 
       {/* Table Area */}
-      <div className="flex-1 overflow-y-auto custom-scrollbar">
-        <table className="w-full text-left font-mono border-collapse">
+      <div className="flex-1 overflow-auto custom-scrollbar -webkit-overflow-scrolling-touch">
+        <table className="w-full min-w-[860px] text-left font-mono border-collapse">
           <thead>
             <tr className="text-white/30 border-b border-white/[0.05] bg-white/[0.01] sticky top-0 z-10 backdrop-blur-md">
               <th className="pl-8 py-4 text-[12px] font-black uppercase tracking-[0.15em] text-left">Asset</th>

@@ -15,8 +15,13 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Asset Oracle",
-  description: "Websocket crypto strategy oracle",
+  title: "Trade Oracle - Neural AI Trading",
+  description: "Websocket quantitative crypto algorithmic trading engine",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Trade Oracle",
+  },
 };
 
 export const viewport = {
@@ -25,6 +30,7 @@ export const viewport = {
   maximumScale: 1,
   userScalable: false,
   viewportFit: "cover",
+  themeColor: "#0a0c10",
 };
 
 import { Toaster } from "sonner";
