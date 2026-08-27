@@ -53,8 +53,92 @@ export default function SettingsPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
           
+          {/* STRATEGY & TIMEFRAME ARCHITECTURE */}
+          <m.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="p-10 rounded-[3rem] bg-[#111622] border border-white/10 shadow-2xl space-y-8 relative overflow-hidden">
+            <div className="flex items-center gap-5">
+              <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 shadow-inner">
+                <TrendingUp size={24} />
+              </div>
+              <div>
+                <h2 className="text-xl font-black uppercase tracking-widest text-white/90">Strategy Engine</h2>
+                <p className="text-xs font-bold text-white/20 uppercase tracking-tighter">Algorithm & Timeframe</p>
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              {/* Strategy Selector */}
+              <div className="space-y-3">
+                <label className="text-[11px] font-black text-white/40 uppercase tracking-widest">Active Neural Strategy</label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {[
+                    { id: "ORACLE_ELITE", name: "Oracle Elite", desc: "Auto RSI + Fee Shield" },
+                    { id: "MANUAL_ASSIST", name: "Manual + Auto Exit", desc: "Manual Buy + Auto TP/SL" },
+                    { id: "EMA_SCALPER", name: "EMA Scalper", desc: "EMA 9/21 Momentum" },
+                    { id: "TREND_FOLLOWER", name: "Trend Follow", desc: "ATR Breakout Channel" }
+                  ].map((strat) => (
+                    <button
+                      key={strat.id}
+                      type="button"
+                      onClick={() => setLocalSettings({ ...localSettings, strategy: strat.id })}
+                      className={`p-4 rounded-2xl border text-left transition-all ${
+                        (localSettings.strategy || "ORACLE_ELITE") === strat.id
+                          ? "bg-indigo-600/20 border-indigo-500 text-white shadow-[0_0_20px_rgba(99,102,241,0.2)]"
+                          : "bg-white/[0.02] border-white/5 text-white/40 hover:bg-white/[0.05]"
+                      }`}
+                    >
+                      <div className="text-[12px] font-black uppercase tracking-wider">{strat.name}</div>
+                      <div className="text-[10px] font-mono opacity-60 mt-1">{strat.desc}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Timeframe Selector */}
+              <div className="space-y-3">
+                <label className="text-[11px] font-black text-white/40 uppercase tracking-widest">Scanning Timeframe</label>
+                <div className="flex gap-2">
+                  {["1m", "3m", "5m", "15m", "1h"].map((tf) => (
+                    <button
+                      key={tf}
+                      type="button"
+                      onClick={() => setLocalSettings({ ...localSettings, timeframe: tf })}
+                      className={`flex-1 py-3 rounded-xl font-mono text-[12px] font-bold border transition-all ${
+                        (localSettings.timeframe || "1m") === tf
+                          ? "bg-indigo-600 text-white border-indigo-500 shadow-md"
+                          : "bg-white/[0.02] border-white/5 text-white/40 hover:bg-white/[0.05]"
+                      }`}
+                    >
+                      {tf}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Anti-Revenge Cooldown */}
+              <div className="space-y-4 pt-3 border-t border-white/5">
+                <div className="flex justify-between items-end">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[11px] font-black text-white/40 uppercase tracking-widest">Stop-Loss Cooldown</label>
+                    <p className="text-[13px] text-white/60 leading-relaxed max-w-[280px]">
+                      Suppresses re-buying a liquidated coin for N minutes to prevent revenge trading into falling knives.
+                    </p>
+                  </div>
+                  <span className="text-3xl font-mono font-black text-amber-400 drop-shadow-[0_0_15px_rgba(245,158,11,0.3)]">
+                    {localSettings.cooldownMinutes ?? 15}m
+                  </span>
+                </div>
+                <input 
+                  type="range" min="0" max="60" step="5" 
+                  value={localSettings.cooldownMinutes ?? 15}
+                  onChange={(e) => setLocalSettings({...localSettings, cooldownMinutes: parseInt(e.target.value)})}
+                  className="w-full h-2 bg-white/5 rounded-full appearance-none cursor-pointer accent-amber-500 hover:bg-white/10 transition-colors"
+                />
+              </div>
+            </div>
+          </m.div>
+
           {/* PROFIT ARCHITECTURE */}
-          <m.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="p-10 rounded-[3rem] bg-[#111622] border border-white/10 shadow-2xl space-y-10 relative overflow-hidden">
+          <m.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="p-10 rounded-[3rem] bg-[#111622] border border-white/10 shadow-2xl space-y-8 relative overflow-hidden">
              <div className="absolute top-0 right-0 p-8 opacity-[0.03] scale-150 rotate-12 pointer-events-none">
                 <Target size={120} />
              </div>
@@ -69,7 +153,7 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            <div className="space-y-10">
+            <div className="space-y-8">
               <div className="space-y-4">
                 <div className="flex justify-between items-end">
                   <div className="flex flex-col gap-1">
@@ -109,28 +193,24 @@ export default function SettingsPage() {
           </m.div>
 
           {/* RISK CAPACITY */}
-          <m.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="p-10 rounded-[3rem] bg-[#111622] border border-white/10 shadow-2xl space-y-10 relative overflow-hidden">
-            <div className="absolute top-0 right-0 p-8 opacity-[0.03] scale-150 rotate-12 pointer-events-none">
-                <ShieldAlert size={120} />
-             </div>
-
+          <m.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="p-10 rounded-[3rem] bg-[#111622] border border-white/10 shadow-2xl space-y-8 relative overflow-hidden lg:col-span-2">
             <div className="flex items-center gap-5">
               <div className="w-12 h-12 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-500 shadow-inner">
                 <ShieldAlert size={24} />
               </div>
               <div>
-                <h2 className="text-xl font-black uppercase tracking-widest text-white/90">Risk Safeguards</h2>
+                <h2 className="text-xl font-black uppercase tracking-widest text-white/90">Risk Safeguards & Deployment Ceiling</h2>
                 <p className="text-xs font-bold text-white/20 uppercase tracking-tighter">Automatic Shielding & Sizing</p>
               </div>
             </div>
 
-            <div className="space-y-10">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
               <div className="space-y-4">
                 <div className="flex justify-between items-end">
                    <div className="flex flex-col gap-1">
                     <label className="text-[11px] font-black text-white/40 uppercase tracking-widest">Hard Stop Loss</label>
-                    <p className="text-[13px] text-white/60 leading-relaxed max-w-[280px]">
-                      The manual "Kill Switch". If a coin drops by this percentage, the bot liquidates instantly to protect your remaining capital.
+                    <p className="text-[13px] text-white/60 leading-relaxed">
+                      Instant liquidation trigger to protect capital.
                     </p>
                   </div>
                   <span className="text-3xl font-mono font-black text-red-500 drop-shadow-[0_0_15px_rgba(239,68,68,0.3)]">{localSettings.stopLoss}%</span>
@@ -147,8 +227,8 @@ export default function SettingsPage() {
                 <div className="flex justify-between items-end">
                   <div className="flex flex-col gap-1">
                     <label className="text-[11px] font-black text-white/40 uppercase tracking-widest">Liquidity Allocation</label>
-                    <p className="text-[13px] text-white/60 leading-relaxed max-w-[280px]">
-                      How much of your available USDT to stake per trade. Using 10% on a $1,000 balance puts $100 into each specific coin entry.
+                    <p className="text-[13px] text-white/60 leading-relaxed">
+                      % of available USDT staked per position.
                     </p>
                   </div>
                   <span className="text-3xl font-mono font-black text-amber-500 drop-shadow-[0_0_15px_rgba(245,158,11,0.3)]">{localSettings.allocationPct}%</span>
@@ -165,8 +245,8 @@ export default function SettingsPage() {
                 <div className="flex justify-between items-end">
                   <div className="flex flex-col gap-1">
                     <label className="text-[11px] font-black text-white/40 uppercase tracking-widest">Deployment Slots</label>
-                    <p className="text-[13px] text-white/60 leading-relaxed max-w-[280px]">
-                      Maximum number of different coins the bot is allowed to hold at the same time. Prevents over-extending your capital.
+                    <p className="text-[13px] text-white/60 leading-relaxed">
+                      Max simultaneous coin positions.
                     </p>
                   </div>
                   <span className="text-3xl font-mono font-black text-indigo-400 drop-shadow-[0_0_15px_rgba(99,102,241,0.3)]">{localSettings.maxOpenPositions}</span>
@@ -177,35 +257,6 @@ export default function SettingsPage() {
                   onChange={(e) => setLocalSettings({...localSettings, maxOpenPositions: parseInt(e.target.value)})}
                   className="w-full h-2 bg-white/5 rounded-full appearance-none cursor-pointer accent-indigo-500 hover:bg-white/10 transition-colors"
                 />
-              </div>
-
-              <div className="space-y-4 pt-4 border-t border-white/5">
-                <div className="flex justify-between items-end">
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[11px] font-black text-white/40 uppercase tracking-widest">Bot Runtime Duration</label>
-                    <p className="text-[13px] text-white/60 leading-relaxed max-w-[280px]">
-                      Set how long the bot should run in the background (Hours). 0 means it runs indefinitely until manually stopped. Max 30 days.
-                    </p>
-                  </div>
-                  <span className="text-3xl font-mono font-black text-indigo-400 drop-shadow-[0_0_15px_rgba(99,102,241,0.3)]">
-                    {localSettings.runTimer === 0 
-                      ? "∞" 
-                      : localSettings.runTimer < 24 
-                        ? `${localSettings.runTimer}h` 
-                        : `${(localSettings.runTimer / 24).toFixed(1)}d`}
-                  </span>
-                </div>
-                <input 
-                  type="range" min="0" max="720" step="1" 
-                  value={localSettings.runTimer ?? 0}
-                  onChange={(e) => setLocalSettings({...localSettings, runTimer: parseInt(e.target.value)})}
-                  className="w-full h-2 bg-white/5 rounded-full appearance-none cursor-pointer accent-indigo-500 hover:bg-white/10 transition-colors"
-                />
-                <div className="flex justify-between text-[8px] font-black text-white/20 uppercase tracking-widest">
-                  <span>Indefinite</span>
-                  <span>15 Days</span>
-                  <span>30 Days</span>
-                </div>
               </div>
             </div>
           </m.div>

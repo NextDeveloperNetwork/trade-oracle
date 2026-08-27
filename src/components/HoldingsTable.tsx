@@ -51,10 +51,10 @@ export default function HoldingsTable() {
     }
   };
 
-  if (!isMounted) return <div className="rounded-2xl border border-white/[0.07] bg-white/[0.02] h-[480px] shrink-0 animate-pulse" />;
+  if (!isMounted) return <div className="rounded-2xl border border-white/[0.07] bg-white/[0.02] h-[650px] shrink-0 animate-pulse" />;
 
   return (
-    <div className="glass-panel rounded-[2.5rem] h-[480px] flex flex-col overflow-hidden shadow-2xl group/table">
+    <div className="glass-panel rounded-[2.5rem] h-[650px] flex flex-col overflow-hidden shadow-2xl group/table">
       {/* Header */}
       <div className="px-8 py-5 border-b border-white/[0.05] flex items-center justify-between shrink-0 bg-white/[0.02]">
         <div className="flex items-center gap-3">
@@ -62,8 +62,8 @@ export default function HoldingsTable() {
             <Wallet size={14} className="text-amber-400" />
           </div>
           <div>
-            <div className="text-[11px] font-black text-white/40 uppercase tracking-widest leading-none">Market Positions</div>
-            <div className="text-[9px] font-mono text-white/20 uppercase tracking-tighter mt-1">Live Telemetry Hub</div>
+            <div className="text-[13px] font-black text-white/60 uppercase tracking-widest leading-none">Market Positions</div>
+            <div className="text-[10px] font-mono text-white/30 uppercase tracking-tighter mt-1.5">Live Telemetry Hub</div>
           </div>
         </div>
         <div className="flex items-center gap-4">
@@ -79,34 +79,39 @@ export default function HoldingsTable() {
       <div className="flex-1 overflow-y-auto custom-scrollbar">
         <table className="w-full text-left font-mono border-collapse">
           <thead>
-            <tr className="text-white/20 border-b border-white/[0.05] bg-white/[0.01] sticky top-0 z-10">
-              <th className="pl-8 py-5 text-[9px] font-black uppercase tracking-[0.2em] text-left">Asset</th>
-              <th className="px-4 py-5 text-[9px] font-black uppercase tracking-[0.2em] text-left">Balance</th>
-              <th className="px-4 py-5 text-[9px] font-black uppercase tracking-[0.2em] text-center">Entry V.</th>
-              <th className="px-4 py-5 text-[9px] font-black uppercase tracking-[0.2em] text-center">Live V.</th>
-              <th className="px-4 py-5 text-[9px] font-black uppercase tracking-[0.2em] text-center">Fee</th>
-              <th className="px-4 py-5 text-[9px] font-black uppercase tracking-[0.2em] text-center">Exit Target</th>
-              <th className="px-4 py-5 text-[9px] font-black uppercase tracking-[0.2em] text-center">Stop Loss</th>
-              <th className="px-4 py-5 text-[9px] font-black uppercase tracking-[0.2em] text-center">Target P&L</th>
-              <th className="px-4 py-5 text-[9px] font-black uppercase tracking-[0.2em] text-center">ROI %</th>
-              <th className="px-4 py-5 text-[9px] font-black uppercase tracking-[0.2em] text-right">P&L Value</th>
-              <th className="pr-8 py-5 text-[9px] font-black uppercase tracking-[0.2em] text-right">Ops</th>
+            <tr className="text-white/30 border-b border-white/[0.05] bg-white/[0.01] sticky top-0 z-10 backdrop-blur-md">
+              <th className="pl-8 py-4 text-[12px] font-black uppercase tracking-[0.15em] text-left">Asset</th>
+              <th className="px-4 py-4 text-[12px] font-black uppercase tracking-[0.15em] text-left">Balance</th>
+              <th className="px-4 py-4 text-[12px] font-black uppercase tracking-[0.15em] text-center">Entry V.</th>
+              <th className="px-4 py-4 text-[12px] font-black uppercase tracking-[0.15em] text-center">Live V.</th>
+              <th className="px-4 py-4 text-[12px] font-black uppercase tracking-[0.15em] text-center">Fee</th>
+              <th className="px-4 py-4 text-[12px] font-black uppercase tracking-[0.15em] text-center">Exit Target</th>
+              <th className="px-4 py-4 text-[12px] font-black uppercase tracking-[0.15em] text-center">Stop Loss</th>
+              <th className="px-4 py-4 text-[12px] font-black uppercase tracking-[0.15em] text-center">Target P&L</th>
+              <th className="px-4 py-4 text-[12px] font-black uppercase tracking-[0.15em] text-center">ROI %</th>
+              <th className="px-4 py-4 text-[12px] font-black uppercase tracking-[0.15em] text-right">P&L Value</th>
+              <th className="pr-8 py-4 text-[12px] font-black uppercase tracking-[0.15em] text-right">Ops</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-white/[0.03]">
             {activeHoldings.map((asset) => {
               const amount = balances[asset] || 0;
-              const value = calculateUSDTValue(asset, amount);
               const positions = openPositions.filter(p => p.coin === asset);
               const totalInvested = positions.reduce((sum, p) => sum + p.invested, 0);
               
               // Use the LOCKED entry price directly from the position record
               // For multiple positions: volume-weighted average of entry prices
+              const posAmount = positions.reduce((sum, p) => sum + p.amount, 0);
               const avgEntry = positions.length > 0 
-                ? positions.reduce((sum, p) => sum + p.entryPrice * p.amount, 0) / positions.reduce((sum, p) => sum + p.amount, 0)
+                ? positions.reduce((sum, p) => sum + p.entryPrice * p.amount, 0) / posAmount
                 : 0;
               
               const currentPrice = marketData[asset]?.price || 0;
+              
+              // Use position amount as fallback when balance hasn't synced yet
+              const effectiveAmount = amount > 0 ? amount : posAmount;
+              const value = asset === "USDT" ? amount : effectiveAmount * currentPrice;
+              const hasPrice = asset === "USDT" || currentPrice > 0;
               
               // Fee calculation based on config (feeRecovery is round-trip percentage)
               const feeRate = (botSettings.feeRecovery || 0.2) / 100;
@@ -116,8 +121,6 @@ export default function HoldingsTable() {
               const combinedFeePercent = (legCount + 1) * (feeRate / 2) * 100;
 
               const pnlPct = (avgEntry > 0 && currentPrice > 0) ? ((currentPrice - avgEntry) / avgEntry) * 100 : 0;
-              const netRoi = avgEntry > 0 ? pnlPct - ((value * (feeRate / 2)) / totalInvested * 100) : 0; 
-              // Wait, the logic above is a bit complex. Let's simplify:
               // Net P&L = (CurrentValue - TotalInvested) - ExitFee
               // (Entry fees are already accounted for in CurrentValue because we have fewer coins)
               const estExitFee = value * (feeRate / 2);
@@ -126,7 +129,7 @@ export default function HoldingsTable() {
               const finalRoi = totalInvested > 0 ? (netProfit / totalInvested) * 100 : 0;
 
               const isUp = netProfit > 0;
-              const hasPosition = avgEntry > 0 && amount > 0;
+              const hasPosition = avgEntry > 0 && effectiveAmount > 0;
               const isPriceLoading = asset !== "USDT" && currentPrice === 0;
 
               return (
@@ -135,29 +138,41 @@ export default function HoldingsTable() {
                   className="group/row hover:bg-white/[0.02] transition-colors relative"
                 >
                   {/* Asset */}
-                  <td className="pl-8 py-5 cursor-pointer" onClick={() => setConvertFromAsset(asset)}>
+                  <td className="pl-8 py-2 cursor-pointer" onClick={() => setConvertFromAsset(asset)}>
                     <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 rounded-2xl bg-indigo-500/5 border border-white/[0.05] flex items-center justify-center text-[14px] font-black text-indigo-400 group-hover/row:border-indigo-500/30 group-hover/row:scale-105 transition-all shrink-0">
+                      <div className="w-10 h-10 rounded-2xl bg-indigo-500/5 border border-white/[0.05] flex items-center justify-center text-[18px] font-black text-indigo-400 group-hover/row:border-indigo-500/30 group-hover/row:scale-105 transition-all shrink-0">
                         {asset[0]}
                       </div>
                       <div className="flex flex-col min-w-0">
-                        <span className="text-[14px] font-black text-white tracking-tighter truncate leading-none uppercase">{asset}</span>
-                        <span className="text-[8px] text-white/20 uppercase font-black tracking-widest mt-1">Core Protocol</span>
+                        <span className="text-[18px] font-black text-white tracking-tighter truncate leading-none uppercase">{asset}</span>
+                        <span className={`text-[11px] font-mono font-bold tracking-tight mt-1 ${
+                          typeof marketData[asset]?.gain === 'number'
+                            ? (marketData[asset]?.gain || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'
+                            : 'text-white/30'
+                        }`}>
+                          {asset === "USDT" 
+                            ? "$1.000 STABLE" 
+                            : typeof marketData[asset]?.gain === 'number' 
+                              ? `${(marketData[asset]?.gain || 0) >= 0 ? '+' : ''}${(marketData[asset]?.gain || 0).toFixed(2)}% 24h` 
+                              : `${asset}/USDT`}
+                        </span>
                       </div>
                     </div>
                   </td>
 
                   {/* Balance */}
-                  <td className="px-4 py-5">
+                  <td className="px-4 py-2">
                     <div className="flex flex-col">
-                      <span className="text-[13px] font-black text-white/90 font-mono tracking-tighter">
-                        {amount < 0.001 ? amount.toFixed(8) : amount.toLocaleString('en-US', { maximumFractionDigits: 6 })}
+                      <span className="text-[16px] font-black text-white/90 font-mono tracking-tighter leading-none">
+                        {effectiveAmount < 0.001 ? effectiveAmount.toFixed(8) : effectiveAmount.toLocaleString('en-US', { maximumFractionDigits: 6 })}
                       </span>
-                      <span className="text-[10px] text-white/20 font-black tracking-widest uppercase mt-0.5">${value.toFixed(3)}</span>
+                      <span className="text-[13px] text-white/40 font-mono font-bold tracking-tight mt-1">
+                        {hasPrice ? `$${value.toFixed(2)}` : 'Syncing...'}
+                      </span>
                     </div>
                   </td>
 
-                  <td className="px-4 py-5 text-center">
+                  <td className="px-4 py-2 text-center">
                     {asset !== "USDT" ? (
                       <div className="flex flex-col items-center">
                         {editingCoin === asset ? (
@@ -165,7 +180,7 @@ export default function HoldingsTable() {
                             <input 
                               autoFocus
                               type="number"
-                              className="w-20 bg-white/5 border border-white/10 rounded px-1.5 py-0.5 text-[11px] font-mono outline-none focus:border-indigo-500"
+                              className="w-24 bg-white/5 border border-white/10 rounded px-1.5 py-0.5 text-[14px] font-mono outline-none focus:border-indigo-500"
                               value={editPrice}
                               onChange={(e) => setEditPrice(e.target.value)}
                               onKeyDown={(e) => {
@@ -177,8 +192,10 @@ export default function HoldingsTable() {
                                 if (e.key === 'Escape') setEditingCoin(null);
                               }}
                               onBlur={() => {
-                                const p = parseFloat(editPrice);
-                                if (!isNaN(p)) updatePositionPrice(asset, p);
+                                if (editPrice) {
+                                  const p = parseFloat(editPrice);
+                                  if (!isNaN(p)) updatePositionPrice(asset, p);
+                                }
                                 setEditingCoin(null);
                               }}
                               onClick={(e) => e.stopPropagation()}
@@ -194,14 +211,14 @@ export default function HoldingsTable() {
                             }}
                             title="Click to set entry price manually"
                           >
-                            <span className={`text-[13px] font-black font-mono tracking-tighter ${avgEntry > 0 ? 'text-white/90' : 'text-amber-500/50 italic animate-pulse'}`}>
+                            <span className={`text-[16px] font-black font-mono tracking-tighter ${avgEntry > 0 ? 'text-white/90' : 'text-amber-500/50 italic animate-pulse'}`}>
                               {avgEntry > 0 
                                 ? `@${avgEntry.toLocaleString('en-US', { minimumFractionDigits: getDecimals(asset) })}` 
                                 : "Set Entry"}
                             </span>
                             {totalInvested > 0 && (
-                              <span className="text-[10px] text-white/30 uppercase font-black tracking-tighter">
-                                ${totalInvested.toFixed(2)}
+                              <span className="text-[13px] text-white/40 font-mono font-bold tracking-tight mt-0.5">
+                                ${totalInvested.toFixed(2)} Cost
                               </span>
                             )}
                           </div>
@@ -211,44 +228,49 @@ export default function HoldingsTable() {
                   </td>
 
                   {/* Live Value */}
-                  <td className="px-4 py-5 text-center">
+                  <td className="px-4 py-2 text-center">
                     {asset !== "USDT" && currentPrice > 0 ? (
                       <div className="flex flex-col items-center">
-                        <span className={`text-[13px] font-black font-mono tracking-tighter ${currentPrice >= (marketData[asset]?.prevPrice || 0) ? 'text-emerald-400' : 'text-red-400'}`}>
+                        <span className={`text-[16px] font-black font-mono tracking-tighter ${currentPrice >= (marketData[asset]?.prevPrice || 0) ? 'text-emerald-400' : 'text-red-400'}`}>
                           @{currentPrice.toLocaleString('en-US', { minimumFractionDigits: getDecimals(asset) })}
                         </span>
-                        <span className="text-[10px] text-white/30 uppercase font-black tracking-tighter">
-                          ${value.toFixed(2)}
+                        <span className="text-[13px] text-white/40 font-mono font-bold tracking-tight mt-0.5">
+                          ${value.toFixed(2)} Val
                         </span>
                       </div>
                     ) : <span className="text-white/5">—</span>}
                   </td>
                   
                   {/* Fee */}
-                  <td className="px-4 py-5 text-center">
+                  <td className="px-4 py-2 text-center">
                     {asset !== "USDT" && currentPrice > 0 ? (
                       <div className="flex flex-col items-center">
-                        <span className="text-[13px] font-bold text-indigo-400/60 font-mono">
+                        <span className="text-[16px] font-bold text-indigo-400/80 font-mono">
                           ${estTotalFee.toFixed(4)}
                         </span>
-                        <span className="text-[7px] text-white/10 uppercase font-black tracking-tighter">Exchange Fee</span>
+                        <span className="text-[10px] text-indigo-300/40 font-mono font-bold tracking-tight mt-0.5">
+                          {(botSettings.feeRecovery || 0.2).toFixed(2)}% Fee
+                        </span>
                       </div>
                     ) : <span className="text-white/5">—</span>}
                   </td>
 
                   {/* Exit Target */}
-                  <td className="px-4 py-5 text-center">
-                    {asset !== "USDT" && totalInvested > 0 && amount > 0 ? (
+                  <td className="px-4 py-2 text-center">
+                    {asset !== "USDT" && totalInvested > 0 && effectiveAmount > 0 ? (
                       (() => {
                         const sideFee = (botSettings.feeRecovery || 0.2) / 200;
-                        const targetPrice = (totalInvested * (1 + (botSettings.netTarget || 0.5) / 100)) / (amount * (1 - sideFee));
+                        const targetPrice = (totalInvested * (1 + (botSettings.netTarget || 0.5) / 100)) / (effectiveAmount * (1 - sideFee));
                         const isHit = currentPrice >= targetPrice;
+                        const distPct = ((targetPrice - currentPrice) / currentPrice) * 100;
                         return (
                           <div className="flex flex-col items-center">
-                            <span className={`text-[13px] font-black font-mono tracking-tighter ${isHit ? 'text-emerald-400' : 'text-amber-500/80'}`}>
+                            <span className={`text-[16px] font-black font-mono tracking-tighter ${isHit ? 'text-emerald-400' : 'text-amber-500/80'}`}>
                               ${targetPrice.toLocaleString('en-US', { minimumFractionDigits: getDecimals(asset) })}
                             </span>
-                            <span className="text-[7px] text-white/20 uppercase font-black tracking-tighter">Min Exit Price</span>
+                            <span className={`text-[10px] font-mono font-bold tracking-tight mt-0.5 ${distPct <= 0 ? 'text-emerald-400' : 'text-amber-400/50'}`}>
+                              {distPct <= 0 ? 'CLEARED' : `+${distPct.toFixed(2)}% away`}
+                            </span>
                           </div>
                         );
                       })()
@@ -256,17 +278,20 @@ export default function HoldingsTable() {
                   </td>
 
                   {/* Stop Loss */}
-                  <td className="px-4 py-5 text-center">
-                    {asset !== "USDT" && totalInvested > 0 && amount > 0 ? (
+                  <td className="px-4 py-2 text-center">
+                    {asset !== "USDT" && totalInvested > 0 && effectiveAmount > 0 ? (
                       (() => {
                         const slPrice = avgEntry * (1 + (botSettings.stopLoss || -1.5) / 100);
                         const isBreached = currentPrice <= slPrice;
+                        const bufferPct = ((currentPrice - slPrice) / currentPrice) * 100;
                         return (
                           <div className="flex flex-col items-center">
-                            <span className={`text-[13px] font-black font-mono tracking-tighter ${isBreached ? 'text-red-500' : 'text-red-400/50'}`}>
+                            <span className={`text-[16px] font-black font-mono tracking-tighter ${isBreached ? 'text-red-500' : 'text-red-400/50'}`}>
                               ${slPrice.toLocaleString('en-US', { minimumFractionDigits: getDecimals(asset) })}
                             </span>
-                            <span className="text-[7px] text-white/20 uppercase font-black tracking-tighter">Exit Trigger</span>
+                            <span className={`text-[10px] font-mono font-bold tracking-tight mt-0.5 ${bufferPct <= 0 ? 'text-red-500 font-black animate-pulse' : 'text-red-400/40'}`}>
+                              {bufferPct <= 0 ? 'TRIGGERED' : `${bufferPct.toFixed(2)}% buffer`}
+                            </span>
                           </div>
                         );
                       })()
@@ -274,48 +299,55 @@ export default function HoldingsTable() {
                   </td>
 
                   {/* Target P&L */}
-                  <td className="px-4 py-5 text-center">
+                  <td className="px-4 py-2 text-center">
                     {asset !== "USDT" && totalInvested > 0 ? (
                       <div className="flex flex-col items-center">
-                        <span className="text-[13px] font-black text-indigo-400 font-mono tracking-tighter">
+                        <span className="text-[16px] font-black text-indigo-400 font-mono tracking-tighter">
                           +${(totalInvested * ((botSettings.netTarget || 0.5) / 100)).toFixed(4)}
                         </span>
-                        <span className="text-[7px] text-white/20 uppercase font-black tracking-tighter">Net On Exit</span>
+                        <span className="text-[10px] text-indigo-300/40 font-mono font-bold tracking-tight mt-0.5">
+                          +{(botSettings.netTarget || 0.5).toFixed(2)}% Net
+                        </span>
                       </div>
                     ) : <span className="text-white/5">—</span>}
                   </td>
 
 
                   {/* ROI % */}
-                  <td className="px-4 py-5 text-center">
-                    {asset !== "USDT" && (hasPosition || amount > 0) && currentPrice > 0 ? (
+                  <td className="px-4 py-2 text-center">
+                    {asset !== "USDT" && avgEntry > 0 && effectiveAmount > 0 && currentPrice > 0 ? (
                       (() => {
                         const isPosUp = finalRoi >= 0;
                         return (
-                          <div className={`inline-flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-2xl border ${
-                            isPosUp ? 'bg-emerald-500/5 text-emerald-400 border-emerald-500/20' : 'bg-red-500/5 text-red-400 border-red-500/20'
+                          <div className={`inline-flex flex-col items-center gap-0.5 px-4 py-2 rounded-2xl border ${
+                            isPosUp ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-red-500/10 text-red-400 border-red-500/30'
                           }`}>
-                            <span className="text-[13px] font-black font-mono leading-none">{isPosUp ? '+' : ''}{finalRoi.toFixed(3)}%</span>
-                            <span className="text-[7px] font-black uppercase opacity-40 tracking-tighter">NET ROI</span>
+                            <span className="text-[16px] font-black font-mono leading-none">{isPosUp ? '+' : ''}{finalRoi.toFixed(3)}%</span>
+                            <span className="text-[10px] font-mono font-bold opacity-75 tracking-tight mt-0.5">
+                              Gross {pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(2)}%
+                            </span>
                           </div>
                         );
                       })()
                     ) : isPriceLoading ? (
-                       <span className="text-white/10 animate-pulse text-[9px] uppercase font-black">Syncing</span>
+                       <span className="text-white/20 animate-pulse text-[12px] uppercase font-black">Syncing</span>
                     ) : <span className="text-white/5">—</span>}
                   </td>
 
                   {/* Net P&L */}
-                  <td className="px-4 py-5 text-right">
-                    {asset !== "USDT" && (hasPosition || amount > 0) && currentPrice > 0 ? (
+                  <td className="px-4 py-2 text-right">
+                    {asset !== "USDT" && avgEntry > 0 && effectiveAmount > 0 && currentPrice > 0 ? (
                       (() => {
                         const isNetUp = netProfit >= 0;
+                        const grossDiff = value - totalInvested;
                         return (
                           <div className={`flex flex-col items-end ${isNetUp ? 'text-emerald-400' : 'text-red-400'}`}>
-                            <div className="font-black text-[14px] tracking-tighter font-mono">
+                            <div className="font-black text-[18px] tracking-tighter font-mono leading-none">
                               {isNetUp ? '+' : ''}${netProfit.toFixed(3)}
                             </div>
-                            <div className="text-[8px] font-black opacity-20 uppercase tracking-widest mt-0.5">P&L VALUE</div>
+                            <div className="text-[11px] font-mono font-bold opacity-50 tracking-tight mt-1.5">
+                              Gross {grossDiff >= 0 ? '+' : ''}${grossDiff.toFixed(3)}
+                            </div>
                           </div>
                         );
                       })()
@@ -323,23 +355,23 @@ export default function HoldingsTable() {
                   </td>
 
                   {/* Actions */}
-                  <td className="pr-8 py-5 text-right">
+                  <td className="pr-8 py-2 text-right">
                     <div className="flex items-center justify-end gap-2 opacity-0 group-hover/row:opacity-100 transition-opacity">
                       {asset !== "USDT" && (
                         <>
                           <button 
                             onClick={(e) => { e.stopPropagation(); handleClosePosition(e, asset, value, amount); }}
-                            className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 flex items-center justify-center hover:bg-emerald-500 hover:text-black transition-all"
+                            className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 flex items-center justify-center hover:bg-emerald-500 hover:text-black transition-all"
                             title="Exit Position"
                           >
-                            <Power size={12} />
+                            <Power size={14} />
                           </button>
                           <button 
                             onClick={(e) => { e.stopPropagation(); handleWipe(e, asset); }}
-                            className="w-8 h-8 rounded-xl bg-white/5 border border-white/10 text-white/20 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all"
+                            className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 text-white/20 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all"
                             title="Emergency Wipe"
                           >
-                            <XCircle size={12} />
+                            <XCircle size={14} />
                           </button>
                         </>
                       )}

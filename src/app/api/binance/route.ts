@@ -1,37 +1,14 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
+import {
+  placeBinanceOrder,
+  getBinanceTimestamp,
+  generateSignature,
+  BASE_URL
+} from "@/lib/binance";
 
 const API_KEY = process.env.BINANCE_API_KEY;
 const SECRET_KEY = process.env.BINANCE_SECRET_KEY;
-const IS_US = process.env.IS_BINANCE_US === "true";
-const BASE_URL = IS_US ? "https://api.binance.us" : "https://api.binance.com";
-
-let timeOffset = 0;
-let lastOffsetSync = 0;
-
-async function getBinanceTimestamp(): Promise<number> {
-  const now = Date.now();
-  // Re-sync offset every 30 seconds
-  if (now - lastOffsetSync > 30_000) {
-    try {
-      const res = await fetch(`${BASE_URL}/api/v3/time`);
-      const data = await res.json();
-      timeOffset = data.serverTime - Date.now();
-      lastOffsetSync = Date.now();
-    } catch {
-      // If sync fails, use last known offset
-    }
-  }
-  return Date.now() + timeOffset;
-}
-
-function generateSignature(queryString: string, secret: string) {
-  return crypto
-    .createHmac("sha256", secret)
-    .update(queryString)
-    .digest("hex");
-}
-
 
 function authenticate(req: Request) {
   const authHeader = req.headers.get("x-oracle-token");
@@ -177,54 +154,102 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json();
-    const { symbol, side, quantity, usdtAmount } = body;
-
-    // 1. STRICT VALIDATION
-    if (!["BUY", "SELL"].includes(side?.toUpperCase())) {
-      return NextResponse.json({ error: "Invalid trading side" }, { status: 400 });
-    }
-    if (typeof symbol !== "string" || !/^[A-Z0-9]{2,12}$/.test(symbol.toUpperCase())) {
-      return NextResponse.json({ error: "Invalid symbol format" }, { status: 400 });
-    }
+    const { symbol, side, quantity, usdtAmount, type, assets, orderType, price, timeInForce } = body;
 
     const timestamp = await getBinanceTimestamp();
-    const upperSym = symbol.toUpperCase();
-    const pair = upperSym.endsWith("USDT") ? upperSym : `${upperSym}USDT`;
 
-    let queryString = `symbol=${pair}&side=${side.toUpperCase()}&type=MARKET&timestamp=${timestamp}&recvWindow=5000`;
-    if (side.toUpperCase() === "BUY" && usdtAmount) {
-      // Use fixed format to avoid scientific notation (Binance requires decimals or integers)
-      queryString += `&quoteOrderQty=${parseFloat(usdtAmount.toString()).toFixed(2)}`;
-    } else if (quantity) {
-      // Format quantity as string with up to 8 decimals, stripping trailing zeros
-      const formattedQty = parseFloat(quantity.toString()).toFixed(8).replace(/\.?0+$/, "");
-      queryString += `&quantity=${formattedQty}`;
+    // ── 1. USER DATA STREAM (WebSocket listenKey lifecycle) ──
+    if (type === "userDataStream") {
+      const res = await fetch(`${BASE_URL}/api/v3/userDataStream`, {
+        method: "POST",
+        headers: { "X-MBX-APIKEY": API_KEY }
+      });
+      return NextResponse.json(await res.json());
     }
 
-    const signature = generateSignature(queryString, SECRET_KEY);
-
-    const response = await fetch(`${BASE_URL}/api/v3/order?${queryString}&signature=${signature}`, {
-      method: "POST",
-      headers: {
-        "X-MBX-APIKEY": API_KEY,
-      },
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      console.error("Binance Order Error:", { 
-        status: response.status, 
-        data, 
-        request: { symbol: pair, side, quantity, usdtAmount, queryString } 
+    if (type === "keepAliveStream") {
+      const { listenKey } = body;
+      if (!listenKey) return NextResponse.json({ error: "Missing listenKey" }, { status: 400 });
+      const res = await fetch(`${BASE_URL}/api/v3/userDataStream?listenKey=${encodeURIComponent(listenKey)}`, {
+        method: "PUT",
+        headers: { "X-MBX-APIKEY": API_KEY }
       });
-      return NextResponse.json(data, { status: response.status });
-    } else {
-      console.log("Binance Order Success:", { symbol: pair, side, data });
+      return NextResponse.json({ success: res.ok, status: res.status });
+    }
+
+    if (type === "closeStream") {
+      const { listenKey } = body;
+      if (!listenKey) return NextResponse.json({ error: "Missing listenKey" }, { status: 400 });
+      const res = await fetch(`${BASE_URL}/api/v3/userDataStream?listenKey=${encodeURIComponent(listenKey)}`, {
+        method: "DELETE",
+        headers: { "X-MBX-APIKEY": API_KEY }
+      });
+      return NextResponse.json({ success: res.ok });
+    }
+
+    // ── 2. SIMPLE EARN (Passive Income) ──
+    if (type === "earnSubscribe") {
+      const qs = `productId=USDT001&amount=${usdtAmount}&autoSubscribe=false&timestamp=${timestamp}`;
+      const sig = generateSignature(qs, SECRET_KEY);
+      const res = await fetch(`${BASE_URL}/sapi/v1/simple-earn/flexible/subscribe?${qs}&signature=${sig}`, {
+        method: "POST", headers: { "X-MBX-APIKEY": API_KEY }
+      });
+      return NextResponse.json(await res.json());
+    }
+
+    if (type === "earnRedeem") {
+      const qs = `productId=USDT001&amount=${usdtAmount}&timestamp=${timestamp}`;
+      const sig = generateSignature(qs, SECRET_KEY);
+      const res = await fetch(`${BASE_URL}/sapi/v1/simple-earn/flexible/redeem?${qs}&signature=${sig}`, {
+        method: "POST", headers: { "X-MBX-APIKEY": API_KEY }
+      });
+      return NextResponse.json(await res.json());
+    }
+
+    // ── 3. AUTO-DUST CONVERSION ──
+    if (type === "dustConvert") {
+      const assetList = Array.isArray(assets) ? assets.join(",") : "";
+      const qs = `asset=${assetList}&timestamp=${timestamp}`;
+      const sig = generateSignature(qs, SECRET_KEY);
+      const res = await fetch(`${BASE_URL}/sapi/v1/asset/dust-btc?${qs}&signature=${sig}`, {
+        method: "POST", headers: { "X-MBX-APIKEY": API_KEY }
+      });
+      const data = await res.json();
+      
+      // If user passed assets, actually convert them
+      if (data.details && assetList) {
+        const convertQs = `asset=${assetList}&timestamp=${timestamp}`;
+        const convertSig = generateSignature(convertQs, SECRET_KEY);
+        const convertRes = await fetch(`${BASE_URL}/sapi/v1/asset/dust?${convertQs}&signature=${convertSig}`, {
+          method: "POST", headers: { "X-MBX-APIKEY": API_KEY }
+        });
+        return NextResponse.json(await convertRes.json());
+      }
       return NextResponse.json(data);
     }
+
+    // ── 4. TRADING EXECUTION ──
+    if (!["BUY", "SELL"].includes(side?.toUpperCase())) {
+      return NextResponse.json({ error: "Invalid trading side. Must be BUY or SELL." }, { status: 400 });
+    }
+    if (typeof symbol !== "string" || !/^[A-Z0-9]{2,12}$/.test(symbol.toUpperCase())) {
+      return NextResponse.json({ error: "Invalid symbol format." }, { status: 400 });
+    }
+
+    const orderData = await placeBinanceOrder({
+      symbol,
+      side: side.toUpperCase(),
+      type: orderType ? orderType.toUpperCase() : "MARKET",
+      quantity,
+      usdtAmount,
+      price,
+      timeInForce
+    });
+
+    return NextResponse.json(orderData);
   } catch (error: any) {
-    console.error("Route POST error:", error.message);
+    console.error("Binance Order POST error:", error.message);
     return NextResponse.json({ error: error.message || "Failed to place order" }, { status: 500 });
   }
 }
+

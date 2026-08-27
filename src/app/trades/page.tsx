@@ -12,26 +12,27 @@ export default function TradesPage() {
   const [activeTab, setActiveTab] = useState<"CYCLES" | "AUDIT">("CYCLES");
 
   // Unique coins from trades
-  const coins = ["ALL", ...Array.from(new Set(completedTrades.map(t => t.coin)))];
+  const coins = ["ALL", ...Array.from(new Set(completedTrades.map((t: any) => t.coin)))];
 
   // Filter logic
-  const filtered = completedTrades.filter(t => {
+  const filtered = completedTrades.filter((t: any) => {
     if (filterCoin !== "ALL" && t.coin !== filterCoin) return false;
-    if (filterResult === "WIN" && t.profit <= 0) return false;
-    if (filterResult === "LOSS" && t.profit >= 0) return false;
+    const net = t.netProfit || t.profit;
+    if (filterResult === "WIN" && net <= 0) return false;
+    if (filterResult === "LOSS" && net >= 0) return false;
     return true;
   });
 
   // Stats
   const totalCompleted = filtered.length;
   const totalExecutions = tradeHistory.length;
-  const wins = filtered.filter(t => t.netProfit > 0).length;
+  const wins = filtered.filter((t: any) => (t.netProfit || t.profit) > 0).length;
   const winRate = totalCompleted > 0 ? (wins / totalCompleted * 100) : 0;
-  const totalGrossPnL = filtered.reduce((sum, t) => sum + t.profit, 0);
-  const totalFees = filtered.reduce((sum, t) => sum + (t.fee || 0), 0);
-  const totalNetPnL = filtered.reduce((sum, t) => sum + (t.netProfit || t.profit), 0);
+  const totalGrossPnL = filtered.reduce((sum: number, t: any) => sum + t.profit, 0);
+  const totalFees = filtered.reduce((sum: number, t: any) => sum + (t.fee || 0), 0);
+  const totalNetPnL = filtered.reduce((sum: number, t: any) => sum + (t.netProfit || t.profit), 0);
   const avgNetProfit = totalCompleted > 0 ? totalNetPnL / totalCompleted : 0;
-  const bestTrade = filtered.length > 0 ? filtered.reduce((best, t) => (t.netProfit || t.profit) > (best.netProfit || best.profit) ? t : best, filtered[0]) : null;
+  const bestTrade = filtered.length > 0 ? filtered.reduce((best: any, t: any) => (t.netProfit || t.profit) > (best.netProfit || best.profit) ? t : best, filtered[0]) : null;
 
   const downloadCSV = () => {
     if (filtered.length === 0) return;
@@ -282,9 +283,9 @@ export default function TradesPage() {
         <div className="mt-4 glass-panel rounded-2xl border border-white/5 p-4">
           <div className="text-[8px] font-mono text-white/30 uppercase tracking-widest mb-3">Cumulative Net Timeline</div>
           <div className="flex items-end gap-px h-20 overflow-x-auto no-scrollbar">
-            {filtered.slice().reverse().map((t, i) => {
+            {filtered.slice().reverse().map((t: any, i: number) => {
               const val = t.netProfit || t.profit;
-              const maxAbs = Math.max(...filtered.map(tr => Math.abs(tr.netProfit || tr.profit)), 0.001);
+              const maxAbs = Math.max(...filtered.map((tr: any) => Math.abs(tr.netProfit || tr.profit)), 0.001);
               const height = Math.max(4, Math.abs(val) / maxAbs * 60);
               return (
                 <div

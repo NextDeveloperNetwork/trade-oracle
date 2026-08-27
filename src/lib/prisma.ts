@@ -12,7 +12,8 @@ function createPrismaClient() {
   } as any);
 }
 
-export const prisma = globalForPrisma.prisma || createPrismaClient();
+export const prisma = createPrismaClient();
 
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
-// Re-generated client sync marker: 2026-06-01T09:15
+// Re-generated client sync marker: 2026-08-27T16:22
+

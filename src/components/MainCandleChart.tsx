@@ -277,7 +277,7 @@ export default function MainCandleChart() {
                        <span className="text-[9px] font-mono text-white/20">{activeCoins.length} ACTIVE</span>
                     </div>
                     <div className="max-h-[350px] overflow-y-auto custom-scrollbar flex flex-col gap-1">
-                      {activeCoins.map(coin => (
+                      {activeCoins.map((coin: string) => (
                         <button
                           key={coin}
                           onClick={() => { setSelectedCoin(coin); setShowCoinDrop(false); }}
@@ -688,7 +688,7 @@ export default function MainCandleChart() {
       {/* ═══ BOTTOM BAR: Coin Switcher + Bot Stats ════════════════════════════ */}
       <div className="bg-white/[0.02] px-6 py-3 flex items-center justify-between border-t border-white/[0.04] shrink-0">
         <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
-          {activeCoins.map((coin) => {
+          {activeCoins.map((coin: string) => {
             const coinData = marketData[coin];
             const change = coinData?.gain;
             return (

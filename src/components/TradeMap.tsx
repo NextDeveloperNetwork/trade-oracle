@@ -82,7 +82,7 @@ export default function TradeMap() {
         </div>
 
         {/* Orbiting Satellite Nodes */}
-        {coinsToDisplay.map((coin, idx) => {
+        {coinsToDisplay.map((coin: string, idx: number) => {
           const angle = (idx * (360 / coinsToDisplay.length)) * (Math.PI / 180);
           const radius = 240; // Increased radius
           const x = Math.cos(angle) * radius;

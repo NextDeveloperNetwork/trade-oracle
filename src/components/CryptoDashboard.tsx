@@ -199,7 +199,7 @@ export default function CryptoDashboard() {
           <div className="lg:col-span-3 h-[360px]">
             <TriangulationTool />
           </div>
-          <div className="lg:col-span-9 h-[520px]">
+          <div className="lg:col-span-9 h-[650px]">
             <HoldingsTable />
           </div>
         </div>
@@ -275,7 +275,7 @@ export default function CryptoDashboard() {
 
                 {activeIntelligenceTab === "scanner" && (
                   <m.div key="scanner" initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }} className="grid grid-cols-1 gap-2">
-                    {activeCoins.map(coin => {
+                    {activeCoins.map((coin: string) => {
                       const md = marketData[coin];
                       const rsiValue = md?.rsiValue || 50;
                       const progress = Math.max(0, Math.min(100, (50 - rsiValue) / 20 * 100)); // RSI 50 -> 0%, RSI 30 -> 100%
@@ -409,7 +409,7 @@ export default function CryptoDashboard() {
                 <PlusCircle size={16} strokeWidth={1} />
                 <span className="text-[9px] font-black uppercase tracking-widest">Connect Node</span>
               </Link>
-              {activeCoins.map((coin) => {
+              {activeCoins.map((coin: string) => {
                 const md = marketData[coin];
                 const priceUp = md?.price && md?.prevPrice && md.price > md.prevPrice;
 

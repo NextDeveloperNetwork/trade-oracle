@@ -44,3 +44,38 @@ export const calculateMinimumExitPrice = (
   const targetUSDT = invested * (1 + netTargetPct / 100);
   return targetUSDT / (amount * (1 - feeRate));
 };
+
+/**
+ * Calculates the hard stop-loss trigger price.
+ * @param entryPrice - Position entry price
+ * @param stopLossPct - Stop loss % (negative or positive number, e.g. -1.5 or 1.5)
+ */
+export const calculateStopLossPrice = (entryPrice: number, stopLossPct: number): number => {
+  const absLoss = Math.abs(stopLossPct);
+  return entryPrice * (1 - absLoss / 100);
+};
+
+/**
+ * Calculates Exponential Moving Average (EMA) for a series of prices.
+ */
+export const calculateEMA = (prices: number[], period: number): number[] => {
+  if (prices.length < period) return [];
+  const k = 2 / (period + 1);
+  const emaArray: number[] = [];
+  
+  // Initial SMA as first EMA point
+  let sum = 0;
+  for (let i = 0; i < period; i++) {
+    sum += prices[i];
+  }
+  let prevEma = sum / period;
+  emaArray.push(prevEma);
+
+  for (let i = period; i < prices.length; i++) {
+    const currentEma = prices[i] * k + prevEma * (1 - k);
+    emaArray.push(currentEma);
+    prevEma = currentEma;
+  }
+  return emaArray;
+};
+

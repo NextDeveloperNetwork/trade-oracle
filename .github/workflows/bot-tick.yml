@@ -1,16 +1,28 @@
-name: Bot Tick
+name: Autonomous Bot Cron
 
 on:
   schedule:
     # Runs every minute, 24/7
     - cron: '* * * * *'
-  workflow_dispatch: # allows manual trigger from GitHub UI
+  workflow_dispatch: # allows manual trigger from GitHub Actions UI
 
 jobs:
   tick:
     runs-on: ubuntu-latest
+    timeout-minutes: 2
     steps:
-      - name: Ping bot tick endpoint
+      - name: Trigger Bot Tick Engine
         run: |
-          curl -s -o /dev/null -w "Status: %{http_code}" \
-            https://traineeship-erasmus.vercel.app/api/bot/tick
+          SECRET="${{ secrets.CRON_SECRET }}"
+          AUTH_HEADER="Authorization: Bearer ${SECRET:-oracle_default_secret_9988}"
+          RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" \
+            -H "$AUTH_HEADER" \
+            -H "x-oracle-token: ${SECRET:-oracle_default_secret_9988}" \
+            https://traineeship-erasmus.vercel.app/api/bot/tick)
+          
+          echo "$RESPONSE"
+          STATUS=$(echo "$RESPONSE" | grep "HTTP_STATUS" | cut -d':' -f2)
+          if [ "$STATUS" -ge 400 ]; then
+            echo "Bot tick returned error status $STATUS"
+            exit 1
+          fi

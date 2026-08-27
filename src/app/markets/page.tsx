@@ -160,7 +160,7 @@ export default function MarketsPage() {
               <Star size={12} className="text-yellow-500 fill-yellow-500" /> Watchlist
             </h2>
             <div className="space-y-2 max-h-[400px] lg:max-h-none overflow-y-auto no-scrollbar">
-              {activeCoins.map(coin => {
+              {activeCoins.map((coin: string) => {
                 const balance = balances[coin] || 0;
                 const hasBalance = balance > 0;
                 const price = marketData[coin]?.price || 0;
