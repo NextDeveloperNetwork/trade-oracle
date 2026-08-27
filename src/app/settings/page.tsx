@@ -204,7 +204,7 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
               <div className="space-y-4">
                 <div className="flex justify-between items-end">
                    <div className="flex flex-col gap-1">
@@ -257,6 +257,33 @@ export default function SettingsPage() {
                   onChange={(e) => setLocalSettings({...localSettings, maxOpenPositions: parseInt(e.target.value)})}
                   className="w-full h-2 bg-white/5 rounded-full appearance-none cursor-pointer accent-indigo-500 hover:bg-white/10 transition-colors"
                 />
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex justify-between items-end">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[11px] font-black text-white/40 uppercase tracking-widest">Auto-Shutoff Timer</label>
+                    <p className="text-[13px] text-white/60 leading-relaxed">
+                      Session duration in hours. 0 = Infinite 24/7.
+                    </p>
+                  </div>
+                  <span className="text-2xl font-mono font-black text-emerald-400 drop-shadow-[0_0_15px_rgba(16,185,129,0.3)]">
+                    {(localSettings.runTimer || 0) === 0 ? "24/7" : `${localSettings.runTimer}h`}
+                  </span>
+                </div>
+                <input 
+                  type="range" min="0" max="720" step="12" 
+                  value={localSettings.runTimer ?? 0}
+                  onChange={(e) => setLocalSettings({...localSettings, runTimer: parseInt(e.target.value)})}
+                  className="w-full h-2 bg-white/5 rounded-full appearance-none cursor-pointer accent-emerald-500 hover:bg-white/10 transition-colors"
+                />
+                <div className="flex items-center gap-1 justify-between text-[10px] font-mono text-white/40 pt-1">
+                  <button type="button" onClick={() => setLocalSettings({...localSettings, runTimer: 0})} className={`px-2 py-0.5 rounded ${localSettings.runTimer === 0 ? 'bg-emerald-500/20 text-emerald-300 font-bold' : 'hover:text-white'}`}>0 (24/7)</button>
+                  <button type="button" onClick={() => setLocalSettings({...localSettings, runTimer: 24})} className={`px-2 py-0.5 rounded ${localSettings.runTimer === 24 ? 'bg-emerald-500/20 text-emerald-300 font-bold' : 'hover:text-white'}`}>24h</button>
+                  <button type="button" onClick={() => setLocalSettings({...localSettings, runTimer: 72})} className={`px-2 py-0.5 rounded ${localSettings.runTimer === 72 ? 'bg-emerald-500/20 text-emerald-300 font-bold' : 'hover:text-white'}`}>3d</button>
+                  <button type="button" onClick={() => setLocalSettings({...localSettings, runTimer: 168})} className={`px-2 py-0.5 rounded ${localSettings.runTimer === 168 ? 'bg-emerald-500/20 text-emerald-300 font-bold' : 'hover:text-white'}`}>7d</button>
+                  <button type="button" onClick={() => setLocalSettings({...localSettings, runTimer: 360})} className={`px-2 py-0.5 rounded ${localSettings.runTimer === 360 ? 'bg-emerald-500/20 text-emerald-300 font-bold' : 'hover:text-white'}`}>15d</button>
+                </div>
               </div>
             </div>
           </m.div>

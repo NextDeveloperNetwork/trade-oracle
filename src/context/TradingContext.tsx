@@ -473,7 +473,7 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
         headers: { "x-oracle-token": ORACLE_AUTH_TOKEN }
       });
       const data = await res.json();
-      if (data.balances) {
+      if (res.ok && data.balances) {
         const nb: Portfolio = { USDT: 0 };
         data.balances.forEach((b: any) => {
           const total = parseFloat(b.free) + parseFloat(b.locked);
@@ -481,15 +481,24 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
         });
         setLiveBalances(nb);
         balancesRef.current = nb;
-        toast.success(`Live sync: $${nb.USDT?.toFixed(2)} USDT available`);
+      } else if (!res.ok) {
+        console.warn("Live balance sync warning:", data);
+        if (data.error || data.msg) {
+          toast.error(`Live Sync: ${data.error || data.msg}`);
+        }
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error("Sync failed", e);
-      toast.error("Live sync failed. Check API keys.");
+      toast.error(`Live sync error: ${e.message || "Check API keys & IP whitelist"}`);
     }
   }, []);
 
-  useEffect(() => { if (isLiveMode) syncBalances(); }, [isLiveMode, syncBalances]);
+  useEffect(() => { 
+    if (!isLiveMode) return;
+    syncBalances();
+    const timer = setInterval(syncBalances, 8000);
+    return () => clearInterval(timer);
+  }, [isLiveMode, syncBalances]);
 
   // Enhanced Multi-Stream WebSocket with Auto-Reconnect & Keep-Alive
   const streamsKey = useMemo(() => {
