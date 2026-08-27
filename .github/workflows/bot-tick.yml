@@ -2,23 +2,27 @@ name: Autonomous Bot Cron
 
 on:
   schedule:
-    # Runs every minute, 24/7
-    - cron: '* * * * *'
-  workflow_dispatch: # allows manual trigger from GitHub Actions UI
+    # GitHub Actions minimum schedule frequency (every 5 minutes)
+    - cron: '*/5 * * * *'
+  workflow_dispatch: # Allows manual trigger from GitHub Actions UI
 
 jobs:
   tick:
     runs-on: ubuntu-latest
-    timeout-minutes: 2
+    timeout-minutes: 3
     steps:
       - name: Trigger Bot Tick Engine
         run: |
           SECRET="${{ secrets.CRON_SECRET }}"
-          AUTH_HEADER="Authorization: Bearer ${SECRET:-oracle_default_secret_9988}"
+          APP_URL="${{ secrets.APP_URL }}"
+          BASE_URL="${APP_URL:-https://traineeship-erasmus.vercel.app}"
+          
+          echo "Targeting: ${BASE_URL}/api/bot/tick"
+          
           RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" \
-            -H "$AUTH_HEADER" \
+            -H "Authorization: Bearer ${SECRET:-oracle_default_secret_9988}" \
             -H "x-oracle-token: ${SECRET:-oracle_default_secret_9988}" \
-            https://traineeship-erasmus.vercel.app/api/bot/tick)
+            "${BASE_URL}/api/bot/tick")
           
           echo "$RESPONSE"
           STATUS=$(echo "$RESPONSE" | grep "HTTP_STATUS" | cut -d':' -f2)
