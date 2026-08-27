@@ -5,7 +5,7 @@ import { useTradingEngine, BotStrategy, MAX_OPEN_POSITIONS, SAFE_RESERVE } from 
 import { STRATEGY_INFO } from "@/lib/strategies";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Zap, Wallet, ChevronDown, Cpu, Activity, RefreshCw, Menu, X, LayoutDashboard, History, Globe, Settings, ShieldCheck } from "lucide-react";
+import { Zap, Wallet, ChevronDown, Cpu, Activity, RefreshCw, Menu, X, LayoutDashboard, History, Globe, Settings, Radio } from "lucide-react";
 import { motion as m, AnimatePresence as AP } from "framer-motion";
 
 export default function Header() {
@@ -29,11 +29,10 @@ export default function Header() {
   
   const dropdownRef = useRef<HTMLDivElement>(null);
   const refillRef = useRef<HTMLDivElement>(null);
-  const mobileMenuRef = useRef<HTMLDivElement>(null);
 
   const pathname = usePathname();
 
-  // Close mobile menu on page navigation
+  // Automatically close mobile menu on page navigation
   useEffect(() => {
     setMobileMenuOpen(false);
     setDropdownOpen(false);
@@ -59,41 +58,40 @@ export default function Header() {
   }, []);
 
   const navLinks = [
-    { href: "/", label: "Overview", icon: <LayoutDashboard size={14} /> },
-    { href: "/trades", label: "History", icon: <History size={14} /> },
-    { href: "/markets", label: "Ecosystem", icon: <Globe size={14} /> },
-    { href: "/settings", label: "Config", icon: <Settings size={14} /> },
+    { href: "/", label: "Overview", icon: <LayoutDashboard size={16} /> },
+    { href: "/trades", label: "History", icon: <History size={16} /> },
+    { href: "/markets", label: "Ecosystem", icon: <Globe size={16} /> },
+    { href: "/settings", label: "Config", icon: <Settings size={16} /> },
   ];
 
   if (!isMounted) {
     return (
-      <nav className="border-b border-[var(--color-crypto-border)] bg-[var(--color-crypto-bg)] fixed w-full top-0 z-50 safe-top h-20" />
+      <nav className="border-b border-[var(--color-crypto-border)] bg-[var(--color-crypto-bg)] fixed w-full top-0 z-50 safe-top h-16 sm:h-20" />
     );
   }
 
   return (
     <nav className="border-b border-white/[0.06] bg-[#0a0f1d]/95 backdrop-blur-2xl fixed w-full top-0 z-50 safe-top shadow-2xl">
-      <div className="max-w-[1920px] mx-auto px-4 sm:px-6 h-16 sm:h-20 flex items-center justify-between gap-2 sm:gap-4">
+      <div className="max-w-[1920px] mx-auto px-4 sm:px-6 h-16 sm:h-20 flex items-center justify-between gap-4">
 
-        {/* ── LEFT: Logo + Desktop Nav ──────────────────────── */}
-        <div className="flex items-center gap-4 sm:gap-6 shrink-0">
-          {/* Logo */}
-          <Link href="/" className="flex items-center gap-2.5 sm:gap-3 group cursor-pointer shrink-0">
+        {/* ── LEFT: Logo ────────────────────────────────────── */}
+        <div className="flex items-center gap-6 shrink-0">
+          <Link href="/" className="flex items-center gap-3 group cursor-pointer shrink-0">
             <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center p-0.5 shadow-[0_0_20px_rgba(99,102,241,0.25)]">
               <div className="w-full h-full bg-[#0a0f1d] rounded-[9px] flex items-center justify-center">
-                <Zap size={14} className="sm:w-4 sm:h-4 text-indigo-400 group-hover:scale-110 transition-transform" />
+                <Zap size={15} className="text-indigo-400 group-hover:scale-110 transition-transform" />
               </div>
             </div>
             <div className="flex flex-col leading-none">
-              <span className="text-[13px] sm:text-[14px] font-black tracking-[0.25em] text-white">ORACLE</span>
-              <span className="text-[7px] sm:text-[8px] font-mono font-black text-indigo-400/50 uppercase tracking-widest mt-0.5">AI Engine</span>
+              <span className="text-[14px] font-black tracking-[0.25em] text-white">ORACLE</span>
+              <span className="text-[7.5px] sm:text-[8px] font-mono font-black text-indigo-400/50 uppercase tracking-widest mt-0.5">Neural AI Trading</span>
             </div>
           </Link>
 
-          <div className="h-6 sm:h-8 w-px bg-white/5 hidden md:block" />
+          <div className="h-7 w-px bg-white/5 hidden md:block" />
 
-          {/* Desktop Nav Links */}
-          <div className="hidden md:flex items-center gap-5 lg:gap-6">
+          {/* Desktop Navigation Links */}
+          <div className="hidden md:flex items-center gap-6">
             {navLinks.map(({ href, label }) => {
               const isActive = pathname === href;
               return (
@@ -108,53 +106,51 @@ export default function Header() {
           </div>
         </div>
 
-        {/* ── CENTER: Key Stats (Desktop & Wide Tablets) ──────── */}
-        <div className="hidden xl:flex items-center gap-5 flex-1 justify-center max-w-xl">
-          <div className="flex items-center gap-4 lg:gap-5 px-4 lg:px-5 py-2 rounded-2xl bg-white/[0.03] border border-white/[0.05]">
+        {/* ── CENTER: Key Stats (Desktop only) ───────────────── */}
+        <div className="hidden lg:flex items-center gap-5 flex-1 justify-center max-w-xl">
+          <div className="flex items-center gap-5 px-5 py-2 rounded-2xl bg-white/[0.03] border border-white/[0.05]">
             <div className="text-center">
               <div className="text-[8px] text-white/25 uppercase tracking-widest font-black">Portfolio</div>
-              <div className="text-[12px] lg:text-[13px] font-black font-mono text-white">
+              <div className="text-[13px] font-black font-mono text-white">
                 ${totalUSDT.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
             </div>
             <div className="h-5 w-px bg-white/5" />
             <div className="text-center">
               <div className="text-[8px] text-white/25 uppercase tracking-widest font-black">Total P&L</div>
-              <div className={`text-[12px] lg:text-[13px] font-black font-mono ${totalProfit >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+              <div className={`text-[13px] font-black font-mono ${totalProfit >= 0 ? "text-emerald-400" : "text-red-400"}`}>
                 {totalProfit >= 0 ? "+" : ""}${totalProfit.toFixed(3)}
               </div>
             </div>
             <div className="h-5 w-px bg-white/5" />
             <div className="text-center">
               <div className="text-[8px] text-white/25 uppercase tracking-widest font-black">Slots</div>
-              <div className="text-[12px] lg:text-[13px] font-black font-mono text-white">
+              <div className="text-[13px] font-black font-mono text-white">
                 {openPositions.length}<span className="text-white/30">/{MAX_OPEN_POSITIONS}</span>
               </div>
             </div>
             <div className="h-5 w-px bg-white/5" />
             <div className="text-center">
               <div className="text-[8px] text-white/25 uppercase tracking-widest font-black">Buy Power</div>
-              <div className="text-[12px] lg:text-[13px] font-black font-mono text-amber-400">
+              <div className="text-[13px] font-black font-mono text-amber-400">
                 ${availableUsdt.toFixed(2)}
               </div>
             </div>
           </div>
         </div>
 
-        {/* ── RIGHT: Controls & Actions ───────────────────────── */}
-        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+        {/* ── RIGHT: Desktop Controls (Hidden on Small Screen) ── */}
+        <div className="hidden md:flex items-center gap-2 shrink-0">
 
-          {/* Strategy Picker (Desktop/Tablet) */}
-          <div className="relative hidden sm:block" ref={dropdownRef}>
+          {/* Strategy Picker */}
+          <div className="relative" ref={dropdownRef}>
             <button
               onClick={() => setDropdownOpen(!dropdownOpen)}
-              className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all text-[10px] sm:text-[11px] font-mono font-bold"
+              className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all text-[11px] font-mono font-bold"
             >
-              <Cpu size={12} className="text-white/40 shrink-0" />
-              <span className={`truncate max-w-[110px] lg:max-w-none ${STRATEGY_INFO[currentStrategy]?.color || "text-white"}`}>
-                {STRATEGY_INFO[currentStrategy]?.name || "UNKNOWN"}
-              </span>
-              <ChevronDown size={10} className="text-white/30 shrink-0" />
+              <Cpu size={12} className="text-white/40" />
+              <span className={STRATEGY_INFO[currentStrategy]?.color || "text-white"}>{STRATEGY_INFO[currentStrategy]?.name || "UNKNOWN"}</span>
+              <ChevronDown size={10} className="text-white/30" />
             </button>
             {dropdownOpen && (
               <div className="absolute right-0 top-full mt-2 w-[260px] bg-[#0d1117] border border-white/10 rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.7)] z-[200] overflow-hidden">
@@ -180,22 +176,22 @@ export default function Header() {
           <div className="flex flex-col items-end gap-0.5">
             <button
               onClick={toggleAutoTrading}
-              className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl border transition-all text-[10px] sm:text-[11px] font-bold font-mono ${
+              className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition-all text-[11px] font-bold font-mono ${
                 isAutoTrading
                   ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-300 shadow-[0_0_20px_rgba(16,185,129,0.15)]"
                   : "bg-white/5 border-white/10 text-white/40 hover:bg-white/10 hover:text-white/70"
               }`}
             >
-              <Zap size={12} fill={isAutoTrading ? "currentColor" : "none"} className="shrink-0" />
+              <Zap size={12} fill={isAutoTrading ? "currentColor" : "none"} />
               <span>{isAutoTrading ? "BOT ON" : "BOT OFF"}</span>
             </button>
             <AP>
               {isAutoTrading && botSettings.runTimer > 0 && autoTradeStartedAt && (
                 <m.div 
                   initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-                  className="text-[8px] sm:text-[9px] font-mono font-black text-white/40 flex items-center gap-1"
+                  className="text-[9px] font-mono font-black text-white/40 flex items-center gap-1"
                 >
-                  <Activity size={7} className="text-emerald-500/50" />
+                  <Activity size={8} className="text-emerald-500/50" />
                   <Countdown startTime={autoTradeStartedAt} hours={botSettings.runTimer} />
                 </m.div>
               )}
@@ -205,22 +201,22 @@ export default function Header() {
           {/* Live/Paper Toggle */}
           <button
             onClick={toggleLiveMode}
-            className={`flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl border transition-all text-[10px] sm:text-[11px] font-bold font-mono ${
+            className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition-all text-[11px] font-bold font-mono ${
               isLiveMode
                 ? "bg-orange-500/15 border-orange-500/30 text-orange-400 shadow-[0_0_12px_rgba(249,115,22,0.1)]"
                 : "bg-white/5 border-white/10 text-white/40 hover:bg-white/10 hover:text-white/70"
             }`}
           >
-            <Activity size={12} className="shrink-0" />
+            <Activity size={12} />
             <span>{isLiveMode ? "LIVE" : "PAPER"}</span>
           </button>
 
-          {/* Refill (Paper only - Desktop) */}
+          {/* Refill (Paper only) */}
           {!isLiveMode && (
-            <div className="relative hidden md:block" ref={refillRef}>
+            <div className="relative" ref={refillRef}>
               <button
                 onClick={() => setRefillOpen(!refillOpen)}
-                className={`flex items-center gap-1.5 px-2.5 py-2 rounded-xl border transition-all text-[11px] font-bold font-mono ${
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border transition-all text-[11px] font-bold font-mono ${
                   refillOpen ? "bg-indigo-500 border-indigo-400 text-white" : "bg-white/5 border-white/10 text-white/40 hover:bg-white/10"
                 }`}
                 title="Refill Paper Balance"
@@ -270,90 +266,159 @@ export default function Header() {
           {isLiveMode && (
             <button
               onClick={syncBalances}
-              className="p-1.5 sm:p-2 rounded-xl bg-white/5 border border-white/10 text-white/40 hover:text-white hover:bg-white/10 transition-all"
+              className="p-2 rounded-xl bg-white/5 border border-white/10 text-white/40 hover:text-white hover:bg-white/10 transition-all"
               title="Sync live balances"
             >
               <RefreshCw size={13} />
             </button>
           )}
 
-          {/* Mobile Menu Hamburger Toggle (Visible on md and smaller) */}
+          {/* Portfolio Pill */}
+          <div className={`hidden xl:flex items-center gap-3 px-3.5 py-1.5 rounded-2xl border transition-all ${isLiveMode ? "border-orange-500/30 bg-orange-500/5" : "border-white/[0.06] bg-white/[0.02]"}`}>
+            <div className="flex flex-col items-end">
+              <span className={`text-[7.5px] font-black uppercase tracking-widest ${isLiveMode ? "text-orange-400" : "text-indigo-400"}`}>
+                {isLiveMode ? "Production" : "Staging"}
+              </span>
+              <div className="font-mono font-black text-sm tracking-tight text-white leading-none mt-0.5">
+                ${totalUSDT.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+              </div>
+            </div>
+            <div className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${isLiveMode ? "bg-orange-500/20 text-orange-400" : "bg-indigo-500/10 text-indigo-400"}`}>
+              <Wallet size={13} />
+            </div>
+          </div>
+        </div>
+
+        {/* ── SMALLSCREEN: Hamburger Button ONLY ─────────────── */}
+        <div className="flex md:hidden items-center">
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="md:hidden p-2 rounded-xl bg-white/5 border border-white/10 text-white/60 hover:text-white hover:bg-white/10 transition-all ml-1"
-            aria-label="Toggle Navigation Menu"
+            className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 text-white flex items-center justify-center hover:bg-white/10 transition-all active:scale-95"
+            aria-label="Toggle Full Menu"
           >
-            {mobileMenuOpen ? <X size={18} /> : <Menu size={18} />}
+            {mobileMenuOpen ? <X size={20} className="text-indigo-400" /> : <Menu size={20} />}
           </button>
         </div>
+
       </div>
 
-      {/* ── MOBILE / TABLET DRAWER (Collapsible) ─────────────── */}
+      {/* ── SMALLSCREEN FULL MENU SHEET (Slide-Down Drawer) ── */}
       <AP>
         {mobileMenuOpen && (
           <m.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
-            className="md:hidden border-t border-white/[0.06] bg-[#070b14]/98 backdrop-blur-3xl px-4 py-5 shadow-2xl overflow-hidden"
+            transition={{ duration: 0.25, ease: "easeInOut" }}
+            className="md:hidden border-t border-white/[0.08] bg-[#070b14]/98 backdrop-blur-3xl px-5 py-6 shadow-2xl overflow-y-auto max-h-[calc(100vh-4rem)]"
           >
-            <div className="space-y-5">
-              
-              {/* Mobile Stats Breakdown */}
-              <div className="grid grid-cols-2 gap-2 p-3 rounded-2xl bg-white/[0.02] border border-white/5">
-                <div className="flex flex-col">
-                  <span className="text-[8px] font-black text-white/30 uppercase tracking-widest">Portfolio</span>
-                  <span className="text-[14px] font-black font-mono text-white">
-                    ${totalUSDT.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </span>
-                </div>
-                <div className="flex flex-col items-end">
-                  <span className="text-[8px] font-black text-white/30 uppercase tracking-widest">Total P&L</span>
-                  <span className={`text-[14px] font-black font-mono ${totalProfit >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-                    {totalProfit >= 0 ? "+" : ""}${totalProfit.toFixed(3)}
-                  </span>
-                </div>
-                <div className="flex flex-col pt-2 border-t border-white/5">
-                  <span className="text-[8px] font-black text-white/30 uppercase tracking-widest">Active Slots</span>
-                  <span className="text-[12px] font-black font-mono text-white/80">
-                    {openPositions.length} / {MAX_OPEN_POSITIONS}
-                  </span>
-                </div>
-                <div className="flex flex-col items-end pt-2 border-t border-white/5">
-                  <span className="text-[8px] font-black text-white/30 uppercase tracking-widest">Buy Power</span>
-                  <span className="text-[12px] font-black font-mono text-amber-400">
-                    ${availableUsdt.toFixed(2)}
-                  </span>
+            <div className="space-y-6">
+
+              {/* 1. MASTER BOT & MODE CONTROLS */}
+              <div className="space-y-3">
+                <div className="text-[9px] font-black text-white/40 uppercase tracking-widest">Master Controls</div>
+                <div className="grid grid-cols-2 gap-3">
+                  {/* Bot Toggle Button */}
+                  <button
+                    onClick={toggleAutoTrading}
+                    className={`flex flex-col items-center justify-center p-3.5 rounded-2xl border transition-all ${
+                      isAutoTrading
+                        ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-300 shadow-[0_0_20px_rgba(16,185,129,0.2)]"
+                        : "bg-white/5 border-white/10 text-white/40"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Zap size={16} fill={isAutoTrading ? "currentColor" : "none"} />
+                      <span className="text-[13px] font-black font-mono">{isAutoTrading ? "BOT ACTIVE" : "BOT OFF"}</span>
+                    </div>
+                    {isAutoTrading && botSettings.runTimer > 0 && autoTradeStartedAt && (
+                      <div className="text-[9px] font-mono font-bold text-white/50 mt-1">
+                        <Countdown startTime={autoTradeStartedAt} hours={botSettings.runTimer} />
+                      </div>
+                    )}
+                  </button>
+
+                  {/* Live / Paper Toggle Button */}
+                  <button
+                    onClick={toggleLiveMode}
+                    className={`flex flex-col items-center justify-center p-3.5 rounded-2xl border transition-all ${
+                      isLiveMode
+                        ? "bg-orange-500/20 border-orange-500/50 text-orange-400 shadow-[0_0_20px_rgba(249,115,22,0.2)]"
+                        : "bg-indigo-500/20 border-indigo-500/50 text-indigo-300 shadow-[0_0_20px_rgba(99,102,241,0.15)]"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Activity size={16} />
+                      <span className="text-[13px] font-black font-mono">{isLiveMode ? "LIVE BINANCE" : "PAPER SIM"}</span>
+                    </div>
+                    <span className="text-[9px] font-mono opacity-60 mt-1">{isLiveMode ? "Real Funds" : "Virtual $10,000"}</span>
+                  </button>
                 </div>
               </div>
 
-              {/* Mobile Strategy Picker */}
-              <div className="space-y-2">
-                <label className="text-[9px] font-black text-white/40 uppercase tracking-widest px-1">Active Neural Strategy</label>
-                <div className="grid grid-cols-2 gap-2">
+              {/* 2. LIVE PORTFOLIO TELEMETRY PANEL */}
+              <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/5 space-y-3">
+                <div className="text-[9px] font-black text-white/30 uppercase tracking-widest">Live Portfolio Stats</div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="flex flex-col">
+                    <span className="text-[8px] font-black text-white/40 uppercase tracking-widest">Total Value</span>
+                    <span className="text-[16px] font-black font-mono text-white mt-0.5">
+                      ${totalUSDT.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                  <div className="flex flex-col items-end">
+                    <span className="text-[8px] font-black text-white/40 uppercase tracking-widest">Total P&L</span>
+                    <span className={`text-[16px] font-black font-mono mt-0.5 ${totalProfit >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                      {totalProfit >= 0 ? "+" : ""}${totalProfit.toFixed(3)}
+                    </span>
+                  </div>
+                  <div className="flex flex-col pt-2 border-t border-white/5">
+                    <span className="text-[8px] font-black text-white/40 uppercase tracking-widest">Active Slots</span>
+                    <span className="text-[13px] font-black font-mono text-white/80 mt-0.5">
+                      {openPositions.length} / {MAX_OPEN_POSITIONS}
+                    </span>
+                  </div>
+                  <div className="flex flex-col items-end pt-2 border-t border-white/5">
+                    <span className="text-[8px] font-black text-white/40 uppercase tracking-widest">Buy Power</span>
+                    <span className="text-[13px] font-black font-mono text-amber-400 mt-0.5">
+                      ${availableUsdt.toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* 3. NEURAL STRATEGY SELECTOR */}
+              <div className="space-y-2.5">
+                <div className="text-[9px] font-black text-white/40 uppercase tracking-widest">Select Strategy</div>
+                <div className="grid grid-cols-1 gap-2">
                   {(Object.keys(STRATEGY_INFO) as BotStrategy[]).map((s) => (
                     <button
                       key={s}
                       onClick={() => { setStrategy(s); }}
-                      className={`p-3 rounded-xl border text-left transition-all ${
+                      className={`p-3 rounded-xl border text-left transition-all flex items-center justify-between ${
                         currentStrategy === s
-                          ? "bg-indigo-600/20 border-indigo-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.2)]"
+                          ? "bg-indigo-600/25 border-indigo-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.25)]"
                           : "bg-white/[0.02] border-white/5 text-white/40 hover:bg-white/[0.05]"
                       }`}
                     >
-                      <div className={`text-[11px] font-mono font-black truncate ${STRATEGY_INFO[s]?.color || "text-white"}`}>
-                        {STRATEGY_INFO[s]?.name}
+                      <div className="flex flex-col min-w-0 pr-3">
+                        <span className={`text-[12px] font-mono font-black ${STRATEGY_INFO[s]?.color || "text-white"}`}>
+                          {STRATEGY_INFO[s]?.name}
+                        </span>
+                        <span className="text-[9px] text-white/40 font-mono mt-0.5">{STRATEGY_INFO[s]?.desc}</span>
                       </div>
-                      <div className="text-[8px] font-mono opacity-50 truncate mt-0.5">{STRATEGY_INFO[s]?.desc}</div>
+                      <span className="text-[8px] font-black px-2 py-0.5 rounded border border-white/20 text-white/50 shrink-0">
+                        {STRATEGY_INFO[s]?.risk || "NORM"}
+                      </span>
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* Mobile Navigation Links */}
-              <div className="space-y-1 pt-2 border-t border-white/5">
-                <label className="text-[9px] font-black text-white/40 uppercase tracking-widest px-1">Pages</label>
-                <div className="grid grid-cols-2 gap-2 pt-1">
+              {/* 4. NAVIGATION PAGES */}
+              <div className="space-y-2.5 pt-2 border-t border-white/5">
+                <div className="text-[9px] font-black text-white/40 uppercase tracking-widest">Navigation</div>
+                <div className="grid grid-cols-2 gap-2">
                   {navLinks.map(({ href, label, icon }) => {
                     const isActive = pathname === href;
                     return (
@@ -361,9 +426,9 @@ export default function Header() {
                         key={href}
                         href={href}
                         onClick={() => setMobileMenuOpen(false)}
-                        className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl border text-[11px] font-black uppercase tracking-wider transition-all ${
+                        className={`flex items-center gap-3 px-4 py-3 rounded-xl border text-[11px] font-black uppercase tracking-wider transition-all ${
                           isActive
-                            ? "bg-indigo-600/20 border-indigo-500/40 text-white"
+                            ? "bg-indigo-600/20 border-indigo-500/50 text-white shadow-[0_0_12px_rgba(99,102,241,0.2)]"
                             : "bg-white/[0.02] border-white/5 text-white/40 hover:bg-white/[0.05] hover:text-white"
                         }`}
                       >
@@ -375,31 +440,41 @@ export default function Header() {
                 </div>
               </div>
 
-              {/* Mobile Paper Refill Helper */}
-              {!isLiveMode && (
-                <div className="pt-2 border-t border-white/5 flex items-center gap-2">
-                  <input
-                    type="number"
-                    placeholder="Refill USDT..."
-                    value={usdtInput}
-                    onChange={(e) => setUsdtInput(e.target.value)}
-                    className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-[11px] font-mono text-white focus:outline-none focus:border-indigo-500"
-                  />
+              {/* 5. TOOLING: REFILL OR SYNC */}
+              <div className="pt-2 border-t border-white/5">
+                {!isLiveMode ? (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      placeholder="Refill Paper USDT..."
+                      value={usdtInput}
+                      onChange={(e) => setUsdtInput(e.target.value)}
+                      className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-[12px] font-mono text-white focus:outline-none focus:border-indigo-500"
+                    />
+                    <button
+                      onClick={() => {
+                        const val = parseFloat(usdtInput);
+                        if (!isNaN(val)) {
+                          setUSDTBalance(val);
+                          setUsdtInput("");
+                          setMobileMenuOpen(false);
+                        }
+                      }}
+                      className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-[11px] font-black uppercase tracking-widest transition-colors shrink-0"
+                    >
+                      Set
+                    </button>
+                  </div>
+                ) : (
                   <button
-                    onClick={() => {
-                      const val = parseFloat(usdtInput);
-                      if (!isNaN(val)) {
-                        setUSDTBalance(val);
-                        setUsdtInput("");
-                        setMobileMenuOpen(false);
-                      }
-                    }}
-                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors"
+                    onClick={() => { syncBalances(); setMobileMenuOpen(false); }}
+                    className="w-full py-3 rounded-xl bg-white/5 border border-white/10 text-white/80 hover:text-white hover:bg-white/10 transition-all flex items-center justify-center gap-2 font-mono text-[11px] font-bold"
                   >
-                    Set
+                    <RefreshCw size={14} />
+                    <span>Sync Live Balances from Binance</span>
                   </button>
-                </div>
-              )}
+                )}
+              </div>
 
             </div>
           </m.div>
