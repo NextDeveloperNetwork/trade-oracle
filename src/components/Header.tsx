@@ -1,11 +1,11 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useTradingEngine, BotStrategy, MAX_OPEN_POSITIONS, SAFE_RESERVE } from "@/context/TradingContext";
+import { useTradingEngine, MAX_OPEN_POSITIONS, SAFE_RESERVE } from "@/context/TradingContext";
 import { STRATEGY_INFO } from "@/lib/strategies";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Zap, Wallet, ChevronDown, Cpu, Activity, RefreshCw, Menu, X, LayoutDashboard, History, Globe, Settings, Radio } from "lucide-react";
+import { Zap, Wallet, Cpu, Activity, RefreshCw, Menu, X, LayoutDashboard, History, Globe, Settings } from "lucide-react";
 import { motion as m, AnimatePresence as AP } from "framer-motion";
 
 export default function Header() {
@@ -13,7 +13,6 @@ export default function Header() {
     totalUSDT, totalProfit, openPositions, balances,
     isLiveMode, toggleLiveMode,
     isAutoTrading, toggleAutoTrading,
-    currentStrategy, setStrategy,
     syncBalances,
     setUSDTBalance,
     botSettings,
@@ -21,21 +20,16 @@ export default function Header() {
   } = useTradingEngine();
 
   const [isMounted, setIsMounted] = useState(false);
-  const [dropdownOpen, setDropdownOpen] = useState(false);
   const [refillOpen, setRefillOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [usdtInput, setUsdtInput] = useState("");
-  const [contextStrategy, setContextStrategy] = useState<BotStrategy | null>(null);
   
-  const dropdownRef = useRef<HTMLDivElement>(null);
   const refillRef = useRef<HTMLDivElement>(null);
-
   const pathname = usePathname();
 
   // Automatically close mobile menu on page navigation
   useEffect(() => {
     setMobileMenuOpen(false);
-    setDropdownOpen(false);
     setRefillOpen(false);
   }, [pathname]);
 
@@ -45,10 +39,6 @@ export default function Header() {
     setIsMounted(true);
     const handler = (e: MouseEvent) => {
       const target = e.target as Node;
-      if (dropdownRef.current && !dropdownRef.current.contains(target)) {
-        setDropdownOpen(false);
-        setContextStrategy(null);
-      }
       if (refillRef.current && !refillRef.current.contains(target)) {
         setRefillOpen(false);
       }
@@ -74,7 +64,7 @@ export default function Header() {
     <nav className="border-b border-white/[0.06] bg-[#0a0f1d]/95 backdrop-blur-2xl fixed w-full top-0 z-50 safe-top shadow-2xl">
       <div className="max-w-[1920px] mx-auto px-4 sm:px-6 h-16 sm:h-20 flex items-center justify-between gap-4">
 
-        {/* ── LEFT: Logo ────────────────────────────────────── */}
+        {/* ── LEFT: Logo + Navigation Links ──────────────────── */}
         <div className="flex items-center gap-6 shrink-0">
           <Link href="/" className="flex items-center gap-3 group cursor-pointer shrink-0">
             <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center p-0.5 shadow-[0_0_20px_rgba(99,102,241,0.25)]">
@@ -142,34 +132,10 @@ export default function Header() {
         {/* ── RIGHT: Desktop Controls (Hidden on Small Screen) ── */}
         <div className="hidden md:flex items-center gap-2 shrink-0">
 
-          {/* Strategy Picker */}
-          <div className="relative" ref={dropdownRef}>
-            <button
-              onClick={() => setDropdownOpen(!dropdownOpen)}
-              className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all text-[11px] font-mono font-bold"
-            >
-              <Cpu size={12} className="text-white/40" />
-              <span className={STRATEGY_INFO[currentStrategy]?.color || "text-white"}>{STRATEGY_INFO[currentStrategy]?.name || "UNKNOWN"}</span>
-              <ChevronDown size={10} className="text-white/30" />
-            </button>
-            {dropdownOpen && (
-              <div className="absolute right-0 top-full mt-2 w-[260px] bg-[#0d1117] border border-white/10 rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.7)] z-[200] overflow-hidden">
-                {(Object.keys(STRATEGY_INFO) as BotStrategy[]).map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => { setStrategy(s); setDropdownOpen(false); setContextStrategy(null); }}
-                    onContextMenu={(e) => { e.preventDefault(); setContextStrategy(prev => prev === s ? null : s); }}
-                    className={`w-full flex items-center justify-between px-4 py-2.5 text-left border-b border-white/5 last:border-0 hover:bg-white/5 transition-colors ${currentStrategy === s ? "bg-white/10" : ""}`}
-                  >
-                    <div className="flex flex-col min-w-0 pr-2">
-                      <span className={`text-[11px] font-mono font-black truncate ${STRATEGY_INFO[s]?.color || "text-white"}`}>{STRATEGY_INFO[s]?.name || "UNKNOWN"}</span>
-                      <span className="text-[9px] text-white/30 font-mono truncate">{STRATEGY_INFO[s]?.desc || "No Description"}</span>
-                    </div>
-                    <span className="text-[8px] font-black px-1.5 py-0.5 rounded border border-white/20 text-white/40 shrink-0">{STRATEGY_INFO[s]?.risk || "???"}</span>
-                  </button>
-                ))}
-              </div>
-            )}
+          {/* Strategy Indicator Badge */}
+          <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[11px] font-mono font-bold text-amber-400 shadow-[0_0_12px_rgba(245,158,11,0.1)]">
+            <Cpu size={12} className="text-amber-400" />
+            <span>Manual + Auto Exit</span>
           </div>
 
           {/* Bot Toggle & Timer */}
@@ -356,7 +322,21 @@ export default function Header() {
                 </div>
               </div>
 
-              {/* 2. LIVE PORTFOLIO TELEMETRY PANEL */}
+              {/* 2. STRATEGY STATUS */}
+              <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/25 space-y-1.5 shadow-[0_0_20px_rgba(245,158,11,0.1)]">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Cpu size={14} className="text-amber-400" />
+                    <span className="text-[13px] font-mono font-black text-amber-400">Manual Entry + Auto Exit</span>
+                  </div>
+                  <span className="text-[8px] font-black px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40">ACTIVE</span>
+                </div>
+                <p className="text-[11px] text-white/70 leading-relaxed font-mono">
+                  You buy coins manually. Bot guards open positions and triggers automatic TP/SL exits 24/7.
+                </p>
+              </div>
+
+              {/* 3. LIVE PORTFOLIO TELEMETRY PANEL */}
               <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/5 space-y-3">
                 <div className="text-[9px] font-black text-white/30 uppercase tracking-widest">Live Portfolio Stats</div>
                 <div className="grid grid-cols-2 gap-4">
@@ -384,34 +364,6 @@ export default function Header() {
                       ${availableUsdt.toFixed(2)}
                     </span>
                   </div>
-                </div>
-              </div>
-
-              {/* 3. NEURAL STRATEGY SELECTOR */}
-              <div className="space-y-2.5">
-                <div className="text-[9px] font-black text-white/40 uppercase tracking-widest">Select Strategy</div>
-                <div className="grid grid-cols-1 gap-2">
-                  {(Object.keys(STRATEGY_INFO) as BotStrategy[]).map((s) => (
-                    <button
-                      key={s}
-                      onClick={() => { setStrategy(s); }}
-                      className={`p-3 rounded-xl border text-left transition-all flex items-center justify-between ${
-                        currentStrategy === s
-                          ? "bg-indigo-600/25 border-indigo-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.25)]"
-                          : "bg-white/[0.02] border-white/5 text-white/40 hover:bg-white/[0.05]"
-                      }`}
-                    >
-                      <div className="flex flex-col min-w-0 pr-3">
-                        <span className={`text-[12px] font-mono font-black ${STRATEGY_INFO[s]?.color || "text-white"}`}>
-                          {STRATEGY_INFO[s]?.name}
-                        </span>
-                        <span className="text-[9px] text-white/40 font-mono mt-0.5">{STRATEGY_INFO[s]?.desc}</span>
-                      </div>
-                      <span className="text-[8px] font-black px-2 py-0.5 rounded border border-white/20 text-white/50 shrink-0">
-                        {STRATEGY_INFO[s]?.risk || "NORM"}
-                      </span>
-                    </button>
-                  ))}
                 </div>
               </div>
 

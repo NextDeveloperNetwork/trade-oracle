@@ -66,30 +66,17 @@ export default function SettingsPage() {
             </div>
 
             <div className="space-y-6">
-              {/* Strategy Selector */}
+              {/* Strategy Card */}
               <div className="space-y-3">
-                <label className="text-[11px] font-black text-white/40 uppercase tracking-widest">Active Neural Strategy</label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {[
-                    { id: "ORACLE_ELITE", name: "Oracle Elite", desc: "Auto RSI + Fee Shield" },
-                    { id: "MANUAL_ASSIST", name: "Manual + Auto Exit", desc: "Manual Buy + Auto TP/SL" },
-                    { id: "EMA_SCALPER", name: "EMA Scalper", desc: "EMA 9/21 Momentum" },
-                    { id: "TREND_FOLLOWER", name: "Trend Follow", desc: "ATR Breakout Channel" }
-                  ].map((strat) => (
-                    <button
-                      key={strat.id}
-                      type="button"
-                      onClick={() => setLocalSettings({ ...localSettings, strategy: strat.id })}
-                      className={`p-4 rounded-2xl border text-left transition-all ${
-                        (localSettings.strategy || "ORACLE_ELITE") === strat.id
-                          ? "bg-indigo-600/20 border-indigo-500 text-white shadow-[0_0_20px_rgba(99,102,241,0.2)]"
-                          : "bg-white/[0.02] border-white/5 text-white/40 hover:bg-white/[0.05]"
-                      }`}
-                    >
-                      <div className="text-[12px] font-black uppercase tracking-wider">{strat.name}</div>
-                      <div className="text-[10px] font-mono opacity-60 mt-1">{strat.desc}</div>
-                    </button>
-                  ))}
+                <label className="text-[11px] font-black text-white/40 uppercase tracking-widest">Active Execution Strategy</label>
+                <div className="p-5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-white shadow-[0_0_25px_rgba(245,158,11,0.15)] space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[14px] font-black font-mono text-amber-400 uppercase tracking-wider">Manual Entry + Auto TP/SL</span>
+                    <span className="text-[9px] font-black px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 uppercase">ACTIVE</span>
+                  </div>
+                  <p className="text-[12px] text-white/70 leading-relaxed">
+                    You buy coins manually whenever you choose. The bot guards your open positions 24/7 and automatically sells when your configured <strong>Net Profit Target</strong> or <strong>Stop Loss</strong> is hit.
+                  </p>
                 </div>
               </div>
 

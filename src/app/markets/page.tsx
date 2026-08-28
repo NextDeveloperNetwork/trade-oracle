@@ -22,9 +22,9 @@ export default function MarketsPage() {
   const [allCoins, setAllCoins] = useState<MarketData[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
-  type FilterMode = "all" | "gainers" | "promising" | "volatile" | "bot";
+  type FilterMode = "all" | "gainers" | "promising" | "volatile";
   const [filterMode, setFilterMode] = useState<FilterMode>("all");
-  const [selectedBotFilter, setSelectedBotFilter] = useState<string>("ORACLE_ELITE");
+  const [selectedBotFilter, setSelectedBotFilter] = useState<string>("MANUAL_ASSIST");
 
   const ORACLE_AUTH_TOKEN = "oracle_default_secret_9988";
 
@@ -104,7 +104,6 @@ export default function MarketsPage() {
               { id: 'gainers', label: 'Top', icon: <TrendingUp size={10} /> },
               { id: 'volatile', label: 'Vol', icon: <Activity size={10} /> },
               { id: 'promising', label: 'New', icon: <Sparkles size={10} /> },
-              { id: 'bot', label: 'Bot', icon: <Zap size={10} /> }
             ].map(f => (
               <button 
                 key={f.id}
@@ -132,23 +131,6 @@ export default function MarketsPage() {
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          
-          {filterMode === 'bot' && (
-            <div className="flex items-center gap-2 bg-cyan-950/30 border border-cyan-500/20 p-2.5 rounded-xl animate-in fade-in slide-in-from-top-1">
-              <select 
-                value={selectedBotFilter} 
-                onChange={(e) => setSelectedBotFilter(e.target.value)}
-                className="bg-transparent text-[10px] font-mono font-bold text-cyan-300 outline-none cursor-pointer appearance-none flex-1"
-              >
-                {(Object.keys(STRATEGY_INFO) as (keyof typeof STRATEGY_INFO)[]).map(s => (
-                  <option key={s} value={s} className="bg-neutral-900 text-white">
-                    {STRATEGY_INFO[s]?.name}
-                  </option>
-                ))}
-              </select>
-              <ChevronRight size={12} className="text-cyan-500/50" />
-            </div>
-          )}
         </div>
       </div>
 

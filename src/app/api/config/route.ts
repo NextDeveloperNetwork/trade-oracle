@@ -8,7 +8,7 @@ export async function GET() {
     });
     
     return NextResponse.json(config || {
-      strategy: "ORACLE_ELITE",
+      strategy: "MANUAL_ASSIST",
       timeframe: "1m",
       feeRecovery: 0.2,
       netTarget: 0.5,
@@ -48,7 +48,7 @@ export async function POST(req: Request) {
       autoTradeStartedAt = null;
     }
 
-    const strategy = body.strategy || existing?.strategy || "ORACLE_ELITE";
+    const strategy = body.strategy || existing?.strategy || "MANUAL_ASSIST";
     const timeframe = body.timeframe || existing?.timeframe || "1m";
     const feeRecovery = body.feeRecovery !== undefined ? parseFloat(body.feeRecovery) : (existing?.feeRecovery ?? 0.2);
     const netTarget = body.netTarget !== undefined ? parseFloat(body.netTarget) : (existing?.netTarget ?? 0.5);

@@ -49,7 +49,7 @@ export async function GET(req: Request) {
     const {
       isLiveMode,
       activeCoins,
-      strategy = "ORACLE_ELITE",
+      strategy = "MANUAL_ASSIST",
       timeframe = "1m",
       feeRecovery = 0.2,
       netTarget = 0.5,
@@ -215,7 +215,7 @@ export async function GET(req: Request) {
 
 async function executeTickTrade(action: "BUY" | "SELL", coin: string, usdtAmount: number, price: number, mode: string, config: any, pos?: any) {
   const isLive = mode === "LIVE";
-  const activeStrategy = config?.strategy || "ORACLE_ELITE";
+  const activeStrategy = config?.strategy || "MANUAL_ASSIST";
   
   if (action === "BUY") {
     if (isLive) {

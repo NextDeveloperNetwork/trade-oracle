@@ -8,7 +8,7 @@ import { evaluateStrategySignal } from "@/lib/strategies";
 // ─── Types ──────────────────────────────────────────────────────────────────
 
 type SignalType = "BUY" | "SELL" | "HOLD" | "INFO";
-export type BotStrategy = "ORACLE_ELITE" | "MANUAL_ASSIST" | "EMA_SCALPER" | "TREND_FOLLOWER" | "VWAP_TRADER" | "MEAN_REVERSION" | "BREAKOUT_HUNTER" | "RSI_MOMENTUM" | "SWING_TRADER" | "AGGRESSIVE" | "HYPER_SCALPER" | "SNIPER" | "MANUAL_CONVERSION" | "MANUAL_ENTRY";
+export type BotStrategy = "MANUAL_ASSIST";
 export type Candle = { o: number; h: number; l: number; c: number; v: number; t: number };
 
 type TradeLog = { id: string; time: string; coin: string; price: string; signal: SignalType; reason?: string };
@@ -172,7 +172,7 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
   // Computed for UI compatibility
   const isAutoTrading = isLiveMode ? isLiveAutoTrading : isPaperAutoTrading;
   const [activeCoins, setActiveCoins] = useState<string[]>(DEFAULT_COINS);
-  const [currentStrategy, setStrategy] = useState<BotStrategy>("ORACLE_ELITE");
+  const [currentStrategy, setStrategy] = useState<BotStrategy>("MANUAL_ASSIST");
   const [paperInitial, setPaperInitial] = useState(10_000);
   const [paperBalances, setPaperBalances] = useState<Portfolio>({ USDT: 10000 });
   const [liveBalances, setLiveBalances] = useState<Portfolio>({ USDT: 0 });

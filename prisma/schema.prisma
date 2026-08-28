@@ -59,7 +59,7 @@ model BalanceSnapshot {
 
 model UserConfig {
   id                 String    @id @default("oracle_config")
-  strategy           String    @default("ORACLE_ELITE")
+  strategy           String    @default("MANUAL_ASSIST")
   timeframe          String    @default("1m")
   feeRecovery        Float     @default(0.2)
   netTarget          Float     @default(0.5)
