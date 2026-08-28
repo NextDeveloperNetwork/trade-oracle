@@ -46,7 +46,7 @@ type CompletedTrade = {
   profit: number;
   netProfit: number;
   profitPct: number;
-  strategy: BotStrategy;
+  strategy?: string;
 };
 
 type OpenPosition = {
@@ -55,7 +55,7 @@ type OpenPosition = {
   entryPrice: number;
   amount: number;
   invested: number;
-  strategy: BotStrategy;
+  strategy?: string;
 };
 
 export type HistorySnapshot = { t: number; v: number };

@@ -24,7 +24,6 @@ export default function MarketsPage() {
   const [loading, setLoading] = useState(true);
   type FilterMode = "all" | "gainers" | "promising" | "volatile";
   const [filterMode, setFilterMode] = useState<FilterMode>("all");
-  const [selectedBotFilter, setSelectedBotFilter] = useState<string>("MANUAL_ASSIST");
 
   const ORACLE_AUTH_TOKEN = "oracle_default_secret_9988";
 
@@ -70,23 +69,10 @@ export default function MarketsPage() {
         const spreadB = (parseFloat(b.high) - parseFloat(b.low)) / parseFloat(b.low);
         return spreadB - spreadA;
       });
-    } else if (filterMode === "bot") {
-      list = list.filter(c => {
-        const gain = parseFloat(c.gain);
-        const spread = (parseFloat(c.high) - parseFloat(c.low)) / (parseFloat(c.low) || 1);
-        const price = parseFloat(c.price);
-        const high = parseFloat(c.high);
-        const low = parseFloat(c.low);
-        
-        switch (selectedBotFilter) {
-          case "ORACLE_ELITE": return spread > 0.03 && gain > -10 && gain < 15;
-          default: return true;
-        }
-      });
     }
 
     return list.slice(0, 100);
-  }, [allCoins, searchTerm, filterMode, selectedBotFilter]);
+  }, [allCoins, searchTerm, filterMode]);
 
 
 
