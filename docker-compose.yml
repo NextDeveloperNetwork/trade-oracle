@@ -41,7 +41,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # 3. Cloudflare Tunnel Sidecar (Optional: Provide CLOUDFLARE_TUNNEL_TOKEN)
+  # 3. Cloudflare Tunnel Sidecar (Provide CLOUDFLARE_TUNNEL_TOKEN in .env)
   cloudflared:
     image: cloudflare/cloudflared:latest
     container_name: trade-oracle-tunnel
@@ -52,5 +52,23 @@ services:
     depends_on:
       - trade-oracle
 
+  # 4. Self-Contained 24/7 Autonomous Bot Cron Engine
+  bot-cron:
+    image: curlimages/curl:latest
+    container_name: trade-oracle-cron
+    restart: always
+    command: >
+      sh -c "while true; do
+        echo '[SELF-HOSTED CRON] Executing Bot Tick...';
+        curl -s -H 'Authorization: Bearer $${CRON_SECRET}' -H 'x-oracle-token: $${CRON_SECRET}' http://trade-oracle:3000/api/bot/tick;
+        echo '';
+        sleep 300;
+      done"
+    environment:
+      - CRON_SECRET=${CRON_SECRET:-c4baf1f0f9d91c4e4ddb51e10fd15ba5327196c47c5555905f728c32ebfd3804}
+    depends_on:
+      - trade-oracle
+
 volumes:
   postgres_data:
+

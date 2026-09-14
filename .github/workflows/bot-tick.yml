@@ -15,7 +15,7 @@ jobs:
         run: |
           SECRET="${{ secrets.CRON_SECRET }}"
           APP_URL="${{ secrets.APP_URL }}"
-          BASE_URL="${APP_URL:-https://trade-oracle-ruby.vercel.app}"
+          BASE_URL="${APP_URL:-https://tbo.dyqanmarket.com}"
           AUTH_TOKEN="${SECRET:-c4baf1f0f9d91c4e4ddb51e10fd15ba5327196c47c5555905f728c32ebfd3804}"
           
           echo "Targeting: ${BASE_URL}/api/bot/tick"

@@ -57,12 +57,16 @@ npx prisma db push
 npx prisma generate
 ```
 
-### 4. Run Development Server
+### 4. Docker Self-Hosting (Recommended)
 ```bash
-npm run dev
+# Build and launch Next.js, PostgreSQL, Cloudflare Tunnel, and 24/7 Cron Engine
+docker compose up -d --build
+
+# Push Prisma Database Schema
+docker exec -it trade-oracle-app npx prisma db push
 ```
 
-Open [http://localhost:3000](http://localhost:3000) to view the application.
+Live Domain: [https://tbo.dyqanmarket.com](https://tbo.dyqanmarket.com)
 
 ---
 
