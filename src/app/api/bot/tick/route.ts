@@ -149,47 +149,13 @@ export async function GET(req: Request) {
         } : undefined
       });
 
-      // ── EXECUTION DISPATCH ──
+      // ── EXECUTION DISPATCH (Manual Mode: Exits Only) ──
       try {
-        if (evalResult.signal === "BUY" && !hasPos) {
-          // Cooldown check
-          if (cooldownCoinSet.has(coin)) {
-            results.push({
-              coin,
-              signal: "BUY BLOCKED (COOLDOWN)",
-              reason: `Recent stop-loss liquidation within last ${cooldownMinutes} minutes. Cooling down.`
-            });
-            continue;
-          }
-
-          if (currentOpenCount >= maxOpenPositions) {
-            results.push({ coin, signal: "BUY SKIPPED", reason: `Max slots ceiling reached (${maxOpenPositions})` });
-            continue;
-          }
-
-          const allocation = currentUsdtAvailable * (allocationPct / 100);
-          const tradeSize = Math.max(11.0, allocation);
-
-          if (currentUsdtAvailable < tradeSize) {
-            results.push({
-              coin,
-              signal: "BUY FAILED",
-              reason: `Insufficient USDT balance ($${currentUsdtAvailable.toFixed(2)} < $${tradeSize.toFixed(2)})`
-            });
-            continue;
-          }
-
-          await executeTickTrade("BUY", coin, tradeSize, currentPrice, mode, config);
-          currentUsdtAvailable = Math.max(0, currentUsdtAvailable - tradeSize);
-          currentOpenCount++;
-          results.push({ coin, signal: "BUY EXECUTED", price: currentPrice, strategy, reason: evalResult.reason });
-
-        } else if (evalResult.signal === "SELL" && hasPos && position) {
+        if (evalResult.signal === "SELL" && hasPos && position) {
           await executeTickTrade("SELL", coin, 0, currentPrice, mode, config, position);
           currentOpenCount = Math.max(0, currentOpenCount - 1);
           currentUsdtAvailable += position.amount * currentPrice;
           results.push({ coin, signal: "SELL EXECUTED", price: currentPrice, strategy, reason: evalResult.reason });
-
         } else {
           results.push({ coin, signal: evalResult.signal, price: currentPrice, strategy, reason: evalResult.reason });
         }
@@ -197,6 +163,7 @@ export async function GET(req: Request) {
         console.error(`Trade execution error for ${coin}:`, tradeErr.message);
         results.push({ coin, signal: "EXECUTION ERROR", error: tradeErr.message });
       }
+
     }
 
     return NextResponse.json({

@@ -1046,20 +1046,7 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
           return { ...prev, [coin]: { ...prev[coin], rsiValue: r, botStatus: evalResult.reason } };
         });
 
-        if (evalResult.signal === "BUY" && !hasPos) {
-          logSignal(coin, "BUY", curPrice, evalResult.rsiVal);
-          if (autoTradeRef.current) {
-            if ((openPositionsRef.current?.length || 0) >= (botSettingsRef.current?.maxOpenPositions || 5)) {
-              toast.error(`Bot Skipped ${coin}: Max open slots reached`);
-            } else {
-              tradeExecutedThisTick = true;
-              const available = Math.max(0, (balancesRef.current.USDT || 0) - SAFE_RESERVE);
-              const allocation = available * ((botSettingsRef.current?.allocationPct || 10) / 100);
-              const tradeSize = Math.max(MAX_TRADE_USD, allocation);
-              executeTradeRef.current("BUY", coin, tradeSize).catch(err => console.error("Buy err", err));
-            }
-          }
-        } else if (evalResult.signal === "SELL" && hasPos) {
+        if (evalResult.signal === "SELL" && hasPos) {
           logSignal(coin, "SELL", curPrice, evalResult.rsiVal);
           if (autoTradeRef.current) {
             tradeExecutedThisTick = true;

@@ -16,17 +16,22 @@ jobs:
           SECRET="${{ secrets.CRON_SECRET }}"
           APP_URL="${{ secrets.APP_URL }}"
           BASE_URL="${APP_URL:-https://traineeship-erasmus.vercel.app}"
+          AUTH_TOKEN="${SECRET:-oracle_default_secret_9988}"
           
           echo "Targeting: ${BASE_URL}/api/bot/tick"
           
           RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" \
-            -H "Authorization: Bearer ${SECRET:-oracle_default_secret_9988}" \
-            -H "x-oracle-token: ${SECRET:-oracle_default_secret_9988}" \
+            -H "Authorization: Bearer ${AUTH_TOKEN}" \
+            -H "x-oracle-token: ${AUTH_TOKEN}" \
             "${BASE_URL}/api/bot/tick")
           
           echo "$RESPONSE"
           STATUS=$(echo "$RESPONSE" | grep "HTTP_STATUS" | cut -d':' -f2)
           if [ "$STATUS" -ge 400 ]; then
-            echo "Bot tick returned error status $STATUS"
+            echo "::error::Bot tick failed with HTTP status $STATUS."
+            if echo "$RESPONSE" | grep -q "DEPLOYMENT_NOT_FOUND"; then
+              echo "::error::Vercel deployment not found. Please set 'APP_URL' in GitHub Secrets (Repository Settings -> Secrets and variables -> Actions) to your live Vercel URL (e.g., https://your-app.vercel.app)."
+            fi
             exit 1
           fi
+
