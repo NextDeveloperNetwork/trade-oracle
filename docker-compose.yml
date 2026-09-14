@@ -6,7 +6,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: trade-oracle-app
     restart: always
     ports:
       - "${PORT:-3000}:3000"
@@ -23,7 +22,6 @@ services:
   # 2. Cloudflare Zero Trust Tunnel Connector
   cloudflared:
     image: cloudflare/cloudflared:latest
-    container_name: trade-oracle-tunnel
     restart: always
     command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
     depends_on:
@@ -34,7 +32,6 @@ services:
   # 3. Autonomous 24/7 Bot Tick Engine (Internal Docker Cron)
   bot-cron:
     image: curlimages/curl:latest
-    container_name: trade-oracle-cron
     restart: always
     command: >
       sh -c "while true; do
@@ -53,5 +50,3 @@ services:
 networks:
   oracle-network:
     driver: bridge
-
-
