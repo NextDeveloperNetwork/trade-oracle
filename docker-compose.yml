@@ -8,7 +8,7 @@ services:
       dockerfile: Dockerfile
     restart: always
     ports:
-      - "${HOST_PORT:-3001}:3000"
+      - "${HOST_PORT:-3855}:3000"
     expose:
       - "3000"
     environment:
