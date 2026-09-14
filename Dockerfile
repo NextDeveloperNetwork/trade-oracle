@@ -2,7 +2,7 @@
 
 # 1. Dependencies Stage
 FROM node:20-alpine AS deps
-RUN apk add --no-cache libc6-compat
+RUN apk add --no-cache libc6-compat openssl
 WORKDIR /app
 
 COPY package.json package-lock.json ./
@@ -10,17 +10,20 @@ RUN npm ci
 
 # 2. Builder Stage
 FROM node:20-alpine AS builder
+RUN apk add --no-cache libc6-compat openssl
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 # Generate Prisma Client & Build Standalone Bundle
 ENV NEXT_TELEMETRY_DISABLED 1
+ENV DATABASE_URL="postgresql://oracle_user:oracle_password@localhost:5432/trade_oracle?sslmode=disable"
 RUN npx prisma generate
 RUN npm run build
 
 # 3. Production Runner Stage
 FROM node:20-alpine AS runner
+RUN apk add --no-cache libc6-compat openssl
 WORKDIR /app
 
 ENV NODE_ENV production
