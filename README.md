@@ -39,7 +39,7 @@ An autonomous, multi-strategy quantitative algorithmic trading engine and analyt
 
 ### 1. Installation
 ```bash
-npm install
+npm install 
 ```
 
 ### 2. Environment Setup
