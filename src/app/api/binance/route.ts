@@ -23,10 +23,6 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Unauthorized access" }, { status: 401 });
   }
 
-  if (!API_KEY || !SECRET_KEY) {
-    return NextResponse.json({ error: "API Keys not configured" }, { status: 500 });
-  }
-
   const { searchParams } = new URL(req.url);
   const type = searchParams.get("type");
 
@@ -107,6 +103,10 @@ export async function GET(req: Request) {
       console.error("Klines Fetch Error:", e.message);
       return NextResponse.json({ error: "Failed to fetch klines" }, { status: 500 });
     }
+  }
+
+  if (!API_KEY || !SECRET_KEY) {
+    return NextResponse.json({ error: "API Keys not configured for private account requests" }, { status: 500 });
   }
 
   const timestamp = await getBinanceTimestamp();
