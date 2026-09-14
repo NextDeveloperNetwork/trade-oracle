@@ -501,13 +501,13 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
   }, [isLiveMode, syncBalances]);
 
   // Enhanced Multi-Stream WebSocket with Auto-Reconnect & Keep-Alive
+  // Enhanced Multi-Stream WebSocket for Market Data
   const streamsKey = useMemo(() => {
     const tickerStreams = activeCoins.map(c => `${c.toLowerCase()}usdt@miniTicker`).join("/");
     const klineStreams = activeCoins.map(c => `${c.toLowerCase()}usdt@kline_1m`).join("/");
     const depthStreams = activeCoins.map(c => `${c.toLowerCase()}usdt@depth5@100ms`).join("/");
-    const userStreamStr = listenKey ? `/${listenKey}` : "";
-    return `${tickerStreams}/${klineStreams}/${depthStreams}${userStreamStr}`;
-  }, [activeCoins, listenKey]);
+    return `${tickerStreams}/${klineStreams}/${depthStreams}`;
+  }, [activeCoins]);
 
   useEffect(() => {
     if (!activeCoins.length || !streamsKey) return;
@@ -530,25 +530,6 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
             const msg = JSON.parse(event.data);
             const d = msg.data;
             if (!d) return;
-
-            // ── USER DATA STREAM INTERCEPT ──
-            if (d.e === "outboundAccountPosition") {
-              const nb: Portfolio = { ...balancesRef.current };
-              d.B.forEach((b: any) => {
-                const total = parseFloat(b.f) + parseFloat(b.l);
-                if (total > 0.00000001) nb[b.a] = total;
-                else delete nb[b.a];
-              });
-              setLiveBalances(nb);
-              toast.info("Wallet Sync: Order Fill / External Transact Detected");
-            }
-
-            if (d.e === "executionReport") {
-              if (d.x === "TRADE") {
-                toast.success(`${d.S} Order Fill: ${d.q} ${d.s} @ ${d.L}`);
-                syncBalances(); 
-              }
-            }
 
             const coin = d.s ? d.s.replace("USDT", "") : "";
             if (!coin) return;
@@ -615,7 +596,44 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
       if (ws) ws.close();
     };
-  }, [streamsKey, syncBalances]);
+  }, [streamsKey]);
+
+  // Dedicated User Data Stream (Account position & execution updates)
+  useEffect(() => {
+    if (!isLiveMode || !listenKey) return;
+
+    let userWs: WebSocket | null = null;
+    try {
+      userWs = new WebSocket(`wss://stream.binance.com:9443/ws/${listenKey}`);
+      userWs.onmessage = (event) => {
+        try {
+          const d = JSON.parse(event.data);
+          if (d.e === "outboundAccountPosition") {
+            const nb: Portfolio = { ...balancesRef.current };
+            d.B.forEach((b: any) => {
+              const total = parseFloat(b.f) + parseFloat(b.l);
+              if (total > 0.00000001) nb[b.a] = total;
+              else delete nb[b.a];
+            });
+            setLiveBalances(nb);
+            toast.info("Wallet Sync: Order Fill / External Transact Detected");
+          }
+          if (d.e === "executionReport" && d.x === "TRADE") {
+            toast.success(`${d.S} Order Fill: ${d.q} ${d.s} @ ${d.L}`);
+            syncBalances();
+          }
+        } catch (err) {
+          console.warn("User data WS parse error:", err);
+        }
+      };
+    } catch (err) {
+      console.warn("User WS connect error:", err);
+    }
+
+    return () => {
+      if (userWs) userWs.close();
+    };
+  }, [isLiveMode, listenKey, syncBalances]);
 
   // Listenkey Acquisition & 30-minute Keep-Alive Ping
   useEffect(() => {
@@ -629,7 +647,11 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
         body: JSON.stringify({ type: "userDataStream" })
       })
         .then(r => r.json())
-        .then(d => d.listenKey && setListenKey(d.listenKey))
+        .then(d => {
+          if (d && d.listenKey) {
+            setListenKey(d.listenKey);
+          }
+        })
         .catch(console.error);
       return;
     }
@@ -645,6 +667,7 @@ export function TradingProvider({ children }: { children: React.ReactNode }) {
 
     return () => clearInterval(keepAliveTimer);
   }, [isLiveMode, listenKey]);
+
 
   const logSignal = useCallback((coin: string, signal: SignalType, price: number, rsiOverride?: number) => {
     const rsiVal = rsiOverride !== undefined ? rsiOverride.toFixed(1) : (marketDataRef.current[coin]?.rsiValue?.toFixed(1) || "??");

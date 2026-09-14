@@ -149,7 +149,7 @@ export async function POST(req: Request) {
   }
 
   if (!API_KEY || !SECRET_KEY) {
-    return NextResponse.json({ error: "API Keys not configured" }, { status: 500 });
+    return NextResponse.json({ error: "Binance API keys (BINANCE_API_KEY / BINANCE_SECRET_KEY) are not configured in Vercel environment variables." }, { status: 400 });
   }
 
   try {
